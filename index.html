@@ -471,6 +471,8 @@ if (!Array.isArray(categories) || !categories.length) categories = DEFAULT_CATS.
 if (categories.indexOf("Другое") < 0) categories.push("Другое");
 
 var settings = Object.assign({ lang: "ru-RU", voiceMode: "auto", micGranted: false }, load(KEY_SET, {}));
+// v2: сбрасываем режим «только клавиатура», который старая версия могла включить сама
+if (settings.mic2 !== true) { settings.voiceMode = "auto"; settings.mic2 = true; try { localStorage.setItem(KEY_SET, JSON.stringify(settings)); } catch (e) {} }
 
 function normalizeExpense(e) {
   if (!e || typeof e !== "object") return null;
@@ -876,7 +878,6 @@ function useKeyboardDictation(reason) {
 
 function markBroken(why) {
   voiceBroken = true;
-  if (isIOS && isStandalone && settings.voiceMode !== "keyboard") { settings.voiceMode = "keyboard"; saveSettings(); }
   updateVoiceUi();
 }
 
@@ -902,29 +903,34 @@ function currentTranscript() {
   return (finalParts.join(" ") + " " + interimText).replace(/\s+/g, " ").trim();
 }
 
+var endGuard = null, autoRetried = false;
+
 function createRecognition() {
   var r = new SR();
   r.lang = settings.lang || "ru-RU";
   r.interimResults = true;
   r.maxAlternatives = 3;
-  // На Android Chrome continuous=true дублирует фразы — там сессия завершается сама после паузы.
-  r.continuous = !isAndroid;
+  // continuous=true на iOS Safari ломает повторный запуск, на Android дублирует фразы —
+  // включаем только на компьютере. Без него сессия сама завершается после паузы.
+  r.continuous = !isAndroid && !isIOS;
 
   r.onstart = function () {
-    starting = false; listening = true; clearTimeout(startWatchdog);
+    if (r !== rec) return;
+    starting = false; listening = true; autoRetried = false; clearTimeout(startWatchdog);
     updateVoiceUi();
     showMsg("● Слушаю… говори: «продукты 70». Нажми ■, чтобы закончить.", "rec", true);
     maxTimer = setTimeout(function () { stopListening(false); }, 20000);
   };
-  r.onaudiostart = function () { clearTimeout(startWatchdog); };
-  r.onspeechstart = function () { showMsg("● Слышу…", "rec", true); };
+  r.onaudiostart = function () { if (r === rec) clearTimeout(startWatchdog); };
+  r.onspeechstart = function () { if (r === rec) showMsg("● Слышу…", "rec", true); };
   r.onresult = function (ev) {
+    if (r !== rec) return;
     var finals = [], interim = "", alts = [];
     for (var i = 0; i < ev.results.length; i++) {
       var res = ev.results[i];
       if (res.isFinal) {
         finals.push(res[0].transcript);
-        alts = [];  // альтернативы последнего финального фрагмента
+        alts = [];
         for (var a = 0; a < res.length; a++) alts.push(res[a].transcript);
       } else {
         interim += res[0].transcript;
@@ -932,34 +938,43 @@ function createRecognition() {
     }
     finalParts = finals; lastAlternatives = alts; interimText = interim;
     $("input").value = currentTranscript();
-    // пауза ~1.6 с после финального результата — завершаем
     clearTimeout(silenceTimer);
     if (!interim && finals.length) silenceTimer = setTimeout(function () { stopListening(false); }, 1600);
     else silenceTimer = setTimeout(function () { stopListening(false); }, 3000);
   };
-  r.onnomatch = function () { /* обработаем в onend */ };
+  r.onnomatch = function () {};
   r.onerror = function (ev) {
+    if (r !== rec) return;
     var code = ev.error || "unknown";
-    if (code === "aborted" && userStopped) return;
+    if (code === "aborted") return;
     if (code === "not-allowed" || code === "service-not-allowed") {
       markBroken(code);
       errorShown = true;
       showMsg(deniedText() + " Нажми 🎤 ещё раз — откроется клавиатура: там тоже есть микрофон 🎤 для диктовки.", "error", true);
       return;
     }
-    if (code === "no-speech" && currentTranscript()) return; // что-то уже услышали
+    if (code === "no-speech" && currentTranscript()) return;
     errorShown = true;
     showMsg(ERR[code] || ("Ошибка распознавания (" + code + "). Попробуй ещё раз или продиктуй через клавиатуру."), "error", true);
   };
-  r.onend = function () {
-    clearTimers();
-    var wasListening = listening || starting;
-    listening = false; starting = false; rec = null;
-    updateVoiceUi();
-    if (!wasListening) return;
-    finishDictation();
-  };
+  r.onend = function () { if (r === rec) endSession(true); };
   return r;
+}
+
+// Единая точка завершения сессии: срабатывает по onend или принудительно,
+// если iOS «забыл» прислать onend (тогда следующий запуск раньше зависал).
+function endSession(process) {
+  clearTimers(); clearTimeout(endGuard);
+  var old = rec;
+  var wasActive = listening || starting;
+  rec = null; listening = false; starting = false;
+  if (old) {
+    old.onstart = old.onresult = old.onerror = old.onend = old.onaudiostart = old.onspeechstart = null;
+    try { old.abort(); } catch (e) {}
+  }
+  updateVoiceUi();
+  if (process && wasActive && !userStopped) finishDictation();
+  else { finalParts = []; lastAlternatives = []; interimText = ""; }
 }
 
 function finishDictation() {
@@ -984,37 +999,41 @@ function finishDictation() {
 
 function stopListening(silent) {
   clearTimers();
-  if (!rec) return;
+  if (!rec) { listening = false; starting = false; updateVoiceUi(); return; }
   userStopped = !!silent;
-  try { if (silent) rec.abort(); else rec.stop(); } catch (e) {}
-  if (silent) { listening = false; starting = false; rec = null; updateVoiceUi(); }
+  if (silent) { endSession(false); return; }
+  try { rec.stop(); } catch (e) {}
+  // Если за 1.5 с onend не пришёл — завершаем сами, чтобы микрофон можно было включить снова.
+  clearTimeout(endGuard);
+  endGuard = setTimeout(function () { if (rec) endSession(true); }, 1500);
 }
 
 function startRecognition() {
+  if (rec) endSession(false);  // гарантированно сбрасываем прошлую сессию
   finalParts = []; lastAlternatives = []; interimText = ""; userStopped = false; errorShown = false;
+  var r;
   try {
-    rec = createRecognition();
+    r = createRecognition();
+    rec = r;
     starting = true;
-    rec.start();
+    r.start();
   } catch (e) {
-    rec = null; starting = false;
-    if (e && e.name === "InvalidStateError") { showMsg("Микрофон уже запущен — подожди секунду и нажми ещё раз.", "error"); return; }
-    markBroken("start-failed");
-    showMsg("Не удалось включить распознавание речи. Нажми 🎤 ещё раз — откроется клавиатура с микрофоном.", "error", true);
+    rec = null; starting = false; updateVoiceUi();
+    showMsg("Микрофон не запустился. Нажми 🎤 ещё раз.", "error", true);
     return;
   }
   showMsg("Включаю микрофон…", "info", true);
   updateVoiceUi();
-  // если за 6 с распознавание так и не стартовало (бывает в iOS standalone / webview) — считаем недоступным
+  // Если распознавание не стартовало за 5 с — сбрасываем и один раз пробуем заново.
+  // Режим клавиатуры больше не включается навсегда из-за одного зависания.
   startWatchdog = setTimeout(function () {
-    if (starting && !listening) {
-      try { rec && rec.abort(); } catch (e) {}
-      rec = null; starting = false;
-      markBroken("timeout");
-      updateVoiceUi();
-      showMsg("Распознавание речи не запустилось в этом режиме. Нажми 🎤 ещё раз — откроется клавиатура, там нажми её 🎤 и продиктуй.", "error", true);
+    if (rec === r && starting && !listening) {
+      endSession(false);
+      if (!autoRetried) { autoRetried = true; startRecognition(); return; }
+      autoRetried = false;
+      showMsg("Микрофон не включился. Нажми 🎤 ещё раз. Если не помогает — открой приложение заново или продиктуй через 🎤 на клавиатуре.", "error", true);
     }
-  }, 6000);
+  }, 5000);
 }
 
 $("btnVoice").addEventListener("click", function () {
