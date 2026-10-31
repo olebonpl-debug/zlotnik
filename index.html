@@ -904,6 +904,7 @@ function currentTranscript() {
 }
 
 var endGuard = null, autoRetried = false;
+var hadSuccess = false; // распознавание уже хоть раз запускалось в этой сессии
 
 function createRecognition() {
   var r = new SR();
@@ -916,7 +917,7 @@ function createRecognition() {
 
   r.onstart = function () {
     if (r !== rec) return;
-    starting = false; listening = true; autoRetried = false; clearTimeout(startWatchdog);
+    starting = false; listening = true; autoRetried = false; hadSuccess = true; clearTimeout(startWatchdog);
     updateVoiceUi();
     showMsg("● Слушаю… говори: «продукты 70». Нажми ■, чтобы закончить.", "rec", true);
     maxTimer = setTimeout(function () { stopListening(false); }, 20000);
@@ -947,6 +948,12 @@ function createRecognition() {
     if (r !== rec) return;
     var code = ev.error || "unknown";
     if (code === "aborted") return;
+    if ((code === "not-allowed" || code === "service-not-allowed") && hadSuccess) {
+      // iOS иногда отказывает при повторном запуске, хотя доступ есть — это временно
+      errorShown = true;
+      showMsg("Микрофон не успел освободиться. Нажми 🎤 ещё раз.", "error", true);
+      return;
+    }
     if (code === "not-allowed" || code === "service-not-allowed") {
       markBroken(code);
       errorShown = true;
