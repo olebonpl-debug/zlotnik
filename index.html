@@ -910,10 +910,10 @@ function createRecognition() {
   var r = new SR();
   r.lang = settings.lang || "ru-RU";
   r.interimResults = true;
-  r.maxAlternatives = 3;
-  // continuous=true на iOS Safari ломает повторный запуск, на Android дублирует фразы —
-  // включаем только на компьютере. Без него сессия сама завершается после паузы.
-  r.continuous = !isAndroid && !isIOS;
+  r.maxAlternatives = isIOS ? 1 : 3;
+  // На iOS Safari результаты приходят только в режиме continuous; повторный запуск
+  // обеспечивает принудительное закрытие сессии (endSession). На Android continuous дублирует фразы.
+  r.continuous = !isAndroid;
 
   r.onstart = function () {
     if (r !== rec) return;
@@ -921,6 +921,13 @@ function createRecognition() {
     updateVoiceUi();
     showMsg("● Слушаю… говори: «продукты 70». Нажми ■, чтобы закончить.", "rec", true);
     maxTimer = setTimeout(function () { stopListening(false); }, 20000);
+    // если за 8 с не пришло ни слова — сообщаем, а не висим молча
+    silenceTimer = setTimeout(function () {
+      if (r === rec && !currentTranscript()) {
+        stopListening(true);
+        showMsg("Микрофон работал, но iPhone не вернул текст. Нажми 🎤 и говори сразу. Если повторится — проверь: Настройки → Основные → Клавиатура → «Включение диктовки», язык диктовки Русский.", "error", true);
+      }
+    }, 8000);
   };
   r.onaudiostart = function () { if (r === rec) clearTimeout(startWatchdog); };
   r.onspeechstart = function () { if (r === rec) showMsg("● Слышу…", "rec", true); };
