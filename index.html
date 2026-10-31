@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Злотник — Книга расходов</title>
+<meta name="theme-color" content="#8b3a3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Злотник">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --card: #fffef9;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #8b3a3a;
+    --accent-dark: #6b2a2a;
+    --soft: #f0ebe3;
+    --border: #e8e2d8;
+    --ok: #2e7d4f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .title-block small { color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+  .title-block h1 { font-size: 36px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+  .btn-pill {
+    background: #fff; border: 1px solid var(--border); border-radius: 999px;
+    padding: 10px 16px; font-size: 14px; cursor: pointer;
+  }
+  h2 { font-size: 18px; margin: 18px 0 10px; }
+  h3 { font-size: 16px; }
+  .input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  input[type="text"], input[type="date"], input[type="number"], select, .field {
+    background: #fff; border: 1px solid var(--border); border-radius: 999px;
+    padding: 14px 18px; font-size: 16px; outline: none; width: 100%;
+    font-family: inherit; color: var(--text); -webkit-appearance: none; appearance: none;
+  }
+  .input-row input { flex: 1; min-width: 0; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .btn-black {
+    background: #1a1a1a; color: #fff; border: none; border-radius: 16px;
+    padding: 14px 14px; font-size: 15px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  }
+  .btn-voice {
+    background: var(--accent); color: #fff; border: none; width: 52px; height: 52px; flex-shrink: 0;
+    border-radius: 50%; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    position: relative; touch-action: manipulation;
+  }
+  .btn-voice.listening { background: #c0392b; animation: pulse 1.2s ease-in-out infinite; }
+  .btn-voice.keyboard { background: var(--accent-dark); }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(192,57,43,.55); }
+    70% { box-shadow: 0 0 0 14px rgba(192,57,43,0); }
+    100% { box-shadow: 0 0 0 0 rgba(192,57,43,0); }
+  }
+  .input-row input.listening { border-color: #c0392b; background: #fff8f6; }
+  .hint { color: var(--muted); font-size: 13px; margin: 6px 0 10px; }
+  .msg { font-size: 14px; margin: 4px 0 12px; min-height: 20px; }
+  .msg.error { color: #c0392b; }
+  .msg.info { color: var(--muted); }
+  .msg.ok { color: var(--ok); }
+  .msg.rec { color: #c0392b; font-weight: 600; }
+  .categories { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .cat { background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+  .cat.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .sum-card { background: #fff; border-radius: 16px; padding: 16px; }
+  .sum-card.highlight { background: var(--accent); color: #fff; }
+  .sum-card small { display: block; font-size: 12px; opacity: 0.8; margin-bottom: 4px; letter-spacing: 0.5px; }
+  .sum-card .val { font-size: 22px; font-weight: 700; white-space: nowrap; }
+  .month-nav { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 20px; }
+  .month-nav button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: #fff; font-size: 18px; cursor: pointer; }
+  .month-nav .center { text-align: center; }
+  .month-nav .center strong { display: block; }
+  .by-cat h3 { margin-bottom: 12px; }
+  .cat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px; }
+  .bar { height: 6px; background: #e8e2d8; border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
+  .bar > div { height: 100%; background: var(--accent); border-radius: 3px; }
+  .records { margin-top: 10px; }
+  .records h3 { margin-bottom: 10px; }
+  .record {
+    background: #fff; border-radius: 14px; padding: 12px 14px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    cursor: pointer; width: 100%; text-align: left; border: none; font-size: 15px;
+  }
+  .record:active { background: var(--soft); }
+  .record .title { word-break: break-word; }
+  .record .meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .record strong { white-space: nowrap; }
+  .empty { color: var(--muted); text-align: center; padding: 20px; }
+  /* Bottom sheet */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(26,26,26,.45); display: none;
+    align-items: flex-end; justify-content: center; z-index: 50;
+  }
+  .overlay.open { display: flex; }
+  .sheet {
+    background: var(--bg); width: 100%; max-width: 420px; max-height: 92vh; overflow-y: auto;
+    border-radius: 22px 22px 0 0; padding: 18px 16px; padding-bottom: max(20px, env(safe-area-inset-bottom));
+    -webkit-overflow-scrolling: touch;
+  }
+  .sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .sheet-head h3 { font-size: 20px; }
+  .close-x { background: #fff; border: 1px solid var(--border); border-radius: 50%; width: 36px; height: 36px; font-size: 18px; cursor: pointer; }
+  label.lbl { display: block; font-size: 12px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin: 12px 0 6px 4px; }
+  .btns { display: flex; gap: 8px; margin-top: 18px; }
+  .btns > button { flex: 1; }
+  .btn-accent { background: var(--accent); color: #fff; border: none; border-radius: 16px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn-ghost { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 14px; font-size: 15px; cursor: pointer; }
+  .btn-danger { background: #fff; color: #c0392b; border: 1px solid #e6b8b1; border-radius: 16px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .cat-manage-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .cat-manage-row input { flex: 1; min-width: 0; padding: 10px 14px; }
+  .icon-btn { background: #fff; border: 1px solid var(--border); border-radius: 12px; width: 42px; height: 42px; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+  .icon-btn.del { color: #c0392b; }
+  .section { background: #fff; border-radius: 16px; padding: 14px; margin-top: 14px; }
+  .section h4 { font-size: 15px; margin-bottom: 8px; }
+  .section p { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  .section .btns { margin-top: 8px; flex-wrap: wrap; }
+  .section select { border-radius: 14px; padding: 12px 14px; }
+  .env-note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-block">
+    <small>КНИГА РАСХОДОВ</small>
+    <h1>Злотник</h1>
+  </div>
+  <button class="btn-pill" id="btnDirections" type="button">Направления</button>
+</header>
+
+<h2>Новый расход</h2>
+<div class="input-row">
+  <input type="text" id="input" placeholder="Продукты 70" autocomplete="off" autocorrect="off" enterkeyhint="done" inputmode="text">
+  <button class="btn-black" id="btnSave" type="button">Записать</button>
+  <button class="btn-voice" id="btnVoice" type="button" title="Голосовой ввод" aria-label="Голосовой ввод">🎤</button>
+</div>
+<div class="hint" id="hint">Нажми 🎤 и скажи: «продукты 70», «вчера кофе 18», «бедронка 87,40».</div>
+<div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+<div class="categories" id="categories"></div>
+
+<div class="summary" id="summary"></div>
+
+<div class="month-nav">
+  <button id="prevMonth" type="button" aria-label="Предыдущий месяц">‹</button>
+  <div class="center">
+    <strong id="monthLabel"></strong>
+    <span id="monthTotal">0 zł</span>
+  </div>
+  <button id="nextMonth" type="button" aria-label="Следующий месяц">›</button>
+</div>
+
+<div class="by-cat">
+  <h3>По направлениям</h3>
+  <div id="byCategories"></div>
+</div>
+
+<div class="records">
+  <h3>Записи</h3>
+  <div id="recordsList"></div>
+</div>
+
+<!-- Edit record sheet -->
+<div class="overlay" id="editOverlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <div class="sheet-head"><h3 id="editTitle">Запись</h3><button class="close-x" type="button" data-close="editOverlay">✕</button></div>
+    <label class="lbl" for="editAmount">Сумма, zł</label>
+    <input type="text" id="editAmount" inputmode="decimal" autocomplete="off">
+    <label class="lbl" for="editCategory">Направление</label>
+    <select id="editCategory"></select>
+    <label class="lbl" for="editDate">Дата</label>
+    <input type="date" id="editDate">
+    <label class="lbl" for="editNote">Описание</label>
+    <input type="text" id="editNote" autocomplete="off">
+    <div class="msg error" id="editMsg"></div>
+    <div class="btns">
+      <button class="btn-danger" type="button" id="editDelete">Удалить</button>
+      <button class="btn-accent" type="button" id="editSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Categories & settings sheet -->
+<div class="overlay" id="catOverlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="catTitle">
+    <div class="sheet-head"><h3 id="catTitle">Направления</h3><button class="close-x" type="button" data-close="catOverlay">✕</button></div>
+    <div id="catManageList"></div>
+    <div class="cat-manage-row">
+      <input type="text" id="newCatName" placeholder="Новое направление" autocomplete="off" enterkeyhint="done">
+      <button class="icon-btn" type="button" id="addCat" aria-label="Добавить">＋</button>
+    </div>
+    <div class="msg error" id="catMsg"></div>
+
+    <div class="section">
+      <h4>Голосовой ввод</h4>
+      <label class="lbl" for="langSelect">Язык распознавания</label>
+      <select id="langSelect">
+        <option value="ru-RU">Русский (ru-RU)</option>
+        <option value="pl-PL">Polski (pl-PL)</option>
+        <option value="uk-UA">Українська (uk-UA)</option>
+      </select>
+      <label class="lbl" for="voiceMode">Кнопка 🎤</label>
+      <select id="voiceMode">
+        <option value="auto">Распознавание в браузере</option>
+        <option value="keyboard">Микрофон клавиатуры телефона</option>
+      </select>
+      <div class="env-note" id="envNote"></div>
+    </div>
+
+    <div class="section">
+      <h4>Данные</h4>
+      <p>Записи хранятся только в этом браузере. Делай резервную копию, чтобы ничего не потерять.</p>
+      <div class="btns">
+        <button class="btn-ghost" type="button" id="exportCsv">Экспорт CSV</button>
+        <button class="btn-ghost" type="button" id="exportJson">Резервная копия</button>
+      </div>
+      <div class="btns">
+        <button class="btn-ghost" type="button" id="importJsonBtn">Восстановить из копии</button>
+      </div>
+      <input type="file" id="importJson" accept=".json,application/json" style="display:none">
+      <div class="msg" id="dataMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script id="zl-parser">
+/* ===== Парсер диктовки / текста. Чистые функции, тестируются в node. ===== */
+var ZL_DEFAULT_KEYWORDS = {
+  "Продукты": ["продукт", "бедронк", "бедронок", "biedronk", "лидл", "lidl", "жабк", "żabk", "zabk", "магазин", "=еда", "=еду", "=еды",
+    "супермаркет", "ашан", "auchan", "карфур", "carrefour", "kaufland", "кауфланд", "aldi", "альди", "netto", "нетто", "=dino", "=дино",
+    "stokrot", "стокрот", "lewiatan", "левиатан", "хлеб", "молок", "овощ", "фрукт", "zakup", "закуп", "spożyw", "spozyw"],
+  "Кафе": ["кафе", "кофе", "кофейн", "=кава", "=kawa", "kawiarn", "ресторан", "restaur", "обед", "ужин", "завтрак", "ланч", "пицц", "pizz",
+    "бургер", "burger", "макдон", "mcdonald", "=kfc", "кебаб", "kebab", "суши", "sushi", "starbucks", "старбакс", "чай", "десерт", "мороженое"],
+  "Транспорт": ["такси", "taxi", "=uber", "=убер", "=bolt", "=болт", "автобус", "autobus", "трамва", "tramwaj", "метро", "metro", "билет", "bilet",
+    "парковк", "паркинг", "parking", "проезд", "поезд", "pociąg", "pociag", "электричк", "=pkp", "=пкп", "транспорт", "jakdojade", "freenow"],
+  "Топливо": ["бензин", "benzyn", "заправк", "заправил", "орлен", "orlen", "дизел", "diesel", "топлив", "paliw", "=shell", "=шелл", "=bp", "=бп",
+    "lotos", "лотос", "circle", "moya", "=амик", "=amic", "=lpg", "газ на"],
+  "Аптека": ["аптек", "apteka", "aptek", "лекарств", "таблетк", "витамин", "leki", "=лек"],
+  "Маникюр": ["маникюр", "педикюр", "ногт", "manicur", "manicure", "paznok", "гель-лак", "гельлак"],
+  "Развлечения": ["кино", "kino", "=бар", "=бару", "=баре", "=bar", "концерт", "koncert", "театр", "teatr", "клуб", "боулинг", "музей", "muzeum",
+    "развлеч", "аттракцион", "квест"],
+  "Другое": []
+};
+
+var ZL_NUM = (function () {
+  var m = {};
+  function add(words, value, kind) { words.split(" ").forEach(function (w) { m[w] = { v: value, k: kind }; }); }
+  add("ноль нуль", 0, "u"); add("один одна одно одну", 1, "u"); add("два две", 2, "u"); add("три", 3, "u");
+  add("четыре", 4, "u"); add("пять", 5, "u"); add("шесть", 6, "u"); add("семь", 7, "u"); add("восемь", 8, "u"); add("девять", 9, "u");
+  add("полтора полторы", 1.5, "u");
+  add("десять", 10, "t"); add("одиннадцать", 11, "t"); add("двенадцать", 12, "t"); add("тринадцать", 13, "t");
+  add("четырнадцать", 14, "t"); add("пятнадцать", 15, "t"); add("шестнадцать", 16, "t"); add("семнадцать", 17, "t");
+  add("восемнадцать", 18, "t"); add("девятнадцать", 19, "t");
+  add("двадцать", 20, "d"); add("тридцать", 30, "d"); add("сорок", 40, "d"); add("пятьдесят", 50, "d");
+  add("шестьдесят", 60, "d"); add("семьдесят", 70, "d"); add("восемьдесят", 80, "d"); add("девяносто", 90, "d");
+  add("полтинник", 50, "d");
+  add("сто сотня сотку сотка", 100, "h"); add("двести", 200, "h"); add("триста", 300, "h"); add("четыреста", 400, "h");
+  add("пятьсот", 500, "h"); add("шестьсот", 600, "h"); add("семьсот", 700, "h"); add("восемьсот", 800, "h"); add("девятьсот", 900, "h");
+  add("тысяча тысячи тысяч тысячу тыща тыщи тыщ тысячa", 1000, "k");
+  return m;
+})();
+
+var ZL_CUR_RE = /^(зл|злот\S*|злотi\S*|zł\S*|zl|zlot\S*|złot\S*|pln|злотих|злотий)$/;
+var ZL_GR_RE = /^(грош\S*|гр|gr|grosz\S*)$/;
+var ZL_DATE = {
+  "сегодня": 0, "сьогодні": 0, "dzisiaj": 0, "dziś": 0, "dzis": 0,
+  "вчера": -1, "вчора": -1, "wczoraj": -1,
+  "позавчера": -2, "позавчора": -2, "przedwczoraj": -2
+};
+var ZL_FILLER_RE = /^(потратил\S*|заплатил\S*|оплатил\S*|запиши|записать|добавь|добавить|расход|трата)$/;
+var ZL_EDGE_STOP = { "на": 1, "за": 1, "в": 1, "во": 1, "и": 1, "по": 1, "с": 1, "na": 1, "za": 1, "w": 1, "i": 1 };
+
+function zlNorm(s) { return String(s).toLowerCase().replace(/ё/g, "е"); }
+
+function zlTokenize(text) {
+  var s = String(text || "");
+  s = s.replace(/[\u00a0\u202f]/g, " ");
+  s = s.replace(/(\d)([^\d\s.,])/g, "$1 $2").replace(/([^\d\s.,+\-])(\d)/g, "$1 $2");
+  // запятая/точка остаются только между цифрами (десятичные)
+  s = s.replace(/[.,]/g, function (m, off, str) {
+    return (/\d/.test(str.charAt(off - 1)) && /\d/.test(str.charAt(off + 1))) ? m : " ";
+  });
+  s = s.replace(/[!?;:"«»“”„()\[\]{}\-–—\/\\*]+/g, " ");
+  return s.split(/\s+/).filter(Boolean);
+}
+
+/** Возвращает { cents, category (или null), dayOffset, note, hasAmount } */
+function zlParse(text, categoryNames) {
+  var cats = (categoryNames && categoryNames.length) ? categoryNames : Object.keys(ZL_DEFAULT_KEYWORDS);
+  var orig = zlTokenize(text);
+  var toks = orig.map(function (t, i) {
+    var low = zlNorm(t);
+    var o = { i: i, raw: t, low: low, type: "word" };
+    if (/^\d+([.,]\d+)?$/.test(low)) { o.type = "num"; o.digit = true; o.v = parseFloat(low.replace(",", ".")); o.int = !/[.,]/.test(low); o.len = low.length; }
+    else if (ZL_NUM[low]) { o.type = "num"; o.digit = false; o.v = ZL_NUM[low].v; o.k = ZL_NUM[low].k; }
+    else if (ZL_CUR_RE.test(low)) o.type = "cur";
+    else if (ZL_GR_RE.test(low)) o.type = "gr";
+    else if (Object.prototype.hasOwnProperty.call(ZL_DATE, low)) o.type = "date";
+    return o;
+  });
+
+  // --- 1. группы чисел внутри подряд идущих числовых токенов
+  var groups = [];
+  var cur = null;
+  function closeGroup() { if (cur) { cur.value = cur.high + cur.cur; groups.push(cur); cur = null; } }
+  for (var i = 0; i < toks.length; i++) {
+    var t = toks[i];
+    if (t.type !== "num") { closeGroup(); continue; }
+    var prevTok = toks[i - 1];
+    var adjacent = cur && prevTok && prevTok.type === "num";
+    if (!adjacent) closeGroup();
+    if (t.digit) {
+      // «1 234» — склейка тысяч
+      if (cur && cur.digitOnly && cur.tokens.length === 1 && cur.intOnly && toks[cur.tokens[0]].len <= 3 && t.int && t.len === 3 && !cur.joined) {
+        cur.cur = cur.cur * 1000 + t.v; cur.tokens.push(i); cur.joined = true; continue;
+      }
+      closeGroup();
+      cur = { tokens: [i], high: 0, cur: t.v, rank: 0, digitOnly: true, intOnly: t.int };
+      continue;
+    }
+    // словесное число
+    var k = t.k, v = t.v;
+    if (k === "k") {
+      if (cur && cur.high === 0 && cur.rank !== 4) { cur.high = (cur.cur || 1) * 1000; cur.cur = 0; cur.rank = 4; cur.tokens.push(i); cur.intOnly = Number.isInteger(cur.high); }
+      else { closeGroup(); cur = { tokens: [i], high: 1000, cur: 0, rank: 4, digitOnly: false, intOnly: true }; }
+      continue;
+    }
+    var need = { u: 1, t: 2, d: 2, h: 3 }[k];
+    var setRank = { u: 1, t: 1, d: 2, h: 3 }[k];
+    if (cur && !cur.digitOnly && cur.rank > need) {
+      cur.cur += v; cur.rank = setRank; cur.tokens.push(i); if (!Number.isInteger(v)) cur.intOnly = false;
+    } else {
+      closeGroup();
+      cur = { tokens: [i], high: 0, cur: v, rank: setRank, digitOnly: false, intOnly: Number.isInteger(v) };
+    }
+  }
+  closeGroup();
+  groups.forEach(function (g) {
+    g.first = g.tokens[0]; g.last = g.tokens[g.tokens.length - 1];
+    g.isInt = Number.isInteger(g.value);
+  });
+
+  // --- 2. выражения суммы
+  var exprs = [];
+  for (var gi = 0; gi < groups.length; gi++) {
+    var g = groups[gi];
+    var used = g.tokens.slice();
+    var val = g.value;
+    var after = g.last + 1;
+    var hasCur = false, hasGr = false;
+    if (toks[after] && toks[after].type === "gr") {         // «40 грошей»
+      exprs.push({ value: g.value / 100, used: used.concat([after]), hasCur: true, end: after });
+      continue;
+    }
+    if (toks[after] && toks[after].type === "cur") { hasCur = true; used.push(after); after++; }
+    var h = groups[gi + 1];
+    if (h && h.first === after && h.isInt && h.value < 100 && g.isInt) {
+      var nextT = toks[h.last + 1];
+      if (nextT && nextT.type === "gr") { hasGr = true; }
+      var adjacentNums = !hasCur && h.first === g.last + 1;
+      if (hasCur || hasGr || adjacentNums) {
+        val = g.value + (h.value < 10 && !hasGr && !toks[h.first].digit ? h.value / 10 : h.value / 100);
+        used = used.concat(h.tokens);
+        after = h.last + 1;
+        if (hasGr) { used.push(after); after++; }
+        if (toks[after] && toks[after].type === "cur") { hasCur = true; used.push(after); after++; }
+        gi++;
+      }
+    }
+    exprs.push({ value: val, used: used, hasCur: hasCur || hasGr, end: after - 1 });
+  }
+  var expr = null;
+  for (var e = exprs.length - 1; e >= 0; e--) if (exprs[e].hasCur) { expr = exprs[e]; break; }
+  if (!expr && exprs.length) expr = exprs[exprs.length - 1];
+
+  var usedSet = {};
+  if (expr) expr.used.forEach(function (x) { usedSet[x] = true; });
+
+  // --- 3. дата
+  var dayOffset = 0;
+  toks.forEach(function (t) { if (t.type === "date") { dayOffset = ZL_DATE[t.low]; usedSet[t.i] = true; } });
+  toks.forEach(function (t) { if (t.type === "cur" || t.type === "gr") usedSet[t.i] = true; });
+
+  // --- 4. описание
+  var rest = toks.filter(function (t) { return !usedSet[t.i] && !ZL_FILLER_RE.test(t.low); });
+  while (rest.length && ZL_EDGE_STOP[rest[0].low]) rest.shift();
+  while (rest.length && ZL_EDGE_STOP[rest[rest.length - 1].low]) rest.pop();
+
+  // --- 5. категория
+  var category = zlMatchCategory(rest.map(function (t) { return t.low; }), cats);
+  var note = rest.map(function (t) { return t.raw; }).join(" ");
+  if (note) note = note.charAt(0).toUpperCase() + note.slice(1);
+
+  var cents = expr ? Math.round(expr.value * 100) : 0;
+  return { cents: cents, hasAmount: !!expr && cents > 0, category: category, dayOffset: dayOffset, note: note };
+}
+
+function zlCatKeywords(name) {
+  var kws = (ZL_DEFAULT_KEYWORDS[name] || []).slice();
+  var n = zlNorm(name).trim();
+  if (n) kws.push(n.length > 5 ? n.slice(0, Math.max(5, n.length - 2)) : "=" + n);
+  return kws;
+}
+
+function zlMatchCategory(words, cats) {
+  var text = " " + words.join(" ") + " ";
+  for (var w = 0; w < words.length; w++) {
+    for (var c = 0; c < cats.length; c++) {
+      if (cats[c] === "Другое") continue;
+      var kws = zlCatKeywords(cats[c]);
+      for (var k = 0; k < kws.length; k++) {
+        var kw = kws[k];
+        if (kw.indexOf(" ") >= 0) { if (w === 0 && text.indexOf(" " + kw) >= 0) return cats[c]; continue; }
+        if (kw.charAt(0) === "=" ? words[w] === kw.slice(1) : words[w].indexOf(kw) === 0) return cats[c];
+      }
+    }
+  }
+  return null;
+}
+
+/** «12,5» → 1250 грошей; null если не число */
+function zlParseAmountField(s) {
+  var t = String(s || "").replace(/[\s\u00a0\u202f]/g, "").replace(/zł|zl|pln/ig, "").replace(",", ".");
+  if (!/^\d+(\.\d{0,2})?$/.test(t)) return null;
+  var c = Math.round(parseFloat(t) * 100);
+  return c > 0 ? c : null;
+}
+
+if (typeof module !== "undefined") module.exports = { zlParse: zlParse, zlTokenize: zlTokenize, zlParseAmountField: zlParseAmountField, ZL_DEFAULT_KEYWORDS: ZL_DEFAULT_KEYWORDS };
+</script>
+
+<script>
+(function () {
+"use strict";
+var KEY = "zlotnik", KEY_CATS = "zlotnik_categories", KEY_SET = "zlotnik_settings";
+var DEFAULT_CATS = ["Продукты", "Кафе", "Транспорт", "Топливо", "Маникюр", "Аптека", "Развлечения", "Другое"];
+var MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+var $ = function (id) { return document.getElementById(id); };
+
+function load(key, def) {
+  try { var v = JSON.parse(localStorage.getItem(key)); return v == null ? def : v; } catch (e) { return def; }
+}
+function store(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+  catch (e) { showMsg("Не удалось сохранить (память браузера недоступна или переполнена). Сделай резервную копию.", "error"); return false; }
+}
+
+// ---------- данные + миграция ----------
+var categories = load(KEY_CATS, null);
+if (!Array.isArray(categories) || !categories.length) categories = DEFAULT_CATS.slice();
+if (categories.indexOf("Другое") < 0) categories.push("Другое");
+
+var settings = Object.assign({ lang: "ru-RU", voiceMode: "auto", micGranted: false }, load(KEY_SET, {}));
+
+function normalizeExpense(e) {
+  if (!e || typeof e !== "object") return null;
+  var cents = typeof e.cents === "number" ? Math.round(e.cents) : Math.round((parseFloat(e.amount) || 0) * 100);
+  var d = new Date(e.date);
+  if (!(cents > 0) || isNaN(d)) return null;
+  var cat = typeof e.category === "string" && e.category ? e.category : "Другое";
+  return { id: String(e.id || (Date.now() + Math.random())), cents: cents, category: cat, date: d.toISOString(),
+    note: typeof e.note === "string" ? e.note : "" };
+}
+var rawExpenses = load(KEY, []);
+if (!Array.isArray(rawExpenses)) rawExpenses = [];
+// удалить старую демо-запись 507 zł (id 1)
+rawExpenses = rawExpenses.filter(function (e) {
+  return !(e && String(e.id) === "1" && Number(e.amount) === 507 && e.category === "Продукты");
+});
+var expenses = rawExpenses.map(normalizeExpense).filter(Boolean);
+expenses.forEach(function (e) { if (categories.indexOf(e.category) < 0) categories.splice(categories.length - 1, 0, e.category); });
+store(KEY, expenses); store(KEY_CATS, categories);
+
+var viewMonth = (function () { var n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })();
+var selectedCat = null;
+
+function save() { store(KEY, expenses); render(); }
+function saveCats() { store(KEY_CATS, categories); }
+function saveSettings() { store(KEY_SET, settings); }
+
+// ---------- формат ----------
+function fmt(cents) {
+  cents = Math.round(cents || 0);
+  var frac = cents % 100 !== 0;
+  return new Intl.NumberFormat("ru-RU", { minimumFractionDigits: frac ? 2 : 0, maximumFractionDigits: 2 }).format(cents / 100) + "\u00a0zł";
+}
+function centsToField(c) { return (c / 100).toFixed(c % 100 ? 2 : 0).replace(".", ","); }
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+}
+function pad(n) { return (n < 10 ? "0" : "") + n; }
+function toDateInput(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+
+var msgTimer = null;
+function showMsg(text, kind, sticky) {
+  var el = $("msg");
+  el.textContent = text || "";
+  el.className = "msg " + (kind || "info");
+  clearTimeout(msgTimer);
+  if (text && !sticky && kind === "ok") msgTimer = setTimeout(function () { el.textContent = ""; }, 3500);
+}
+
+// ---------- добавление ----------
+function addExpense(raw, parsedOverride) {
+  var text = String(raw || "").trim();
+  if (!text) { showMsg("Напиши или продиктуй трату, например: продукты 70", "error"); return false; }
+  var p = parsedOverride || zlParse(text, categories);
+  if (!p.hasAmount) {
+    showMsg("Не нашёл сумму. Допиши её, например «" + (p.note || "продукты") + " 70», и нажми «Записать».", "error", true);
+    $("input").focus();
+    return false;
+  }
+  var d = new Date();
+  d.setDate(d.getDate() + p.dayOffset);
+  var cat = p.category || selectedCat || "Другое";
+  var exp = { id: String(Date.now()) + Math.floor(Math.random() * 1000), cents: p.cents, category: cat, date: d.toISOString(), note: p.note || "" };
+  expenses.push(exp);
+  $("input").value = "";
+  selectedCat = null;
+  // показать месяц, в который попала запись
+  viewMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+  save();
+  var when = p.dayOffset === -1 ? " · вчера" : p.dayOffset === -2 ? " · позавчера" : "";
+  showMsg("✓ Записано: " + fmt(p.cents) + " · " + cat + (exp.note && exp.note !== cat ? " · " + exp.note : "") + when, "ok");
+  return true;
+}
+
+// ---------- рендер ----------
+function renderCategories() {
+  var el = $("categories");
+  el.innerHTML = "";
+  categories.forEach(function (cat) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cat" + (cat === selectedCat ? " active" : "");
+    btn.textContent = cat;
+    btn.onclick = function () {
+      selectedCat = selectedCat === cat ? null : cat;
+      renderCategories();
+      if (selectedCat) showMsg("Направление «" + cat + "» — теперь назови или впиши сумму.", "info");
+      else showMsg("");
+    };
+    el.appendChild(btn);
+  });
+}
+
+function inRange(start, end) {
+  return expenses.filter(function (e) { var d = new Date(e.date); return d >= start && d <= end; });
+}
+function total(arr) { return arr.reduce(function (s, e) { return s + e.cents; }, 0); }
+
+function renderSummary() {
+  var now = new Date();
+  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  var dow = (now.getDay() + 6) % 7; // пн=0 … вс=6
+  var weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+  var weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6, 23, 59, 59, 999);
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  var yearStart = new Date(now.getFullYear(), 0, 1);
+  var yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+  var cards = [
+    ["СЕГОДНЯ", total(inRange(todayStart, todayEnd)), ""],
+    ["НЕДЕЛЯ", total(inRange(weekStart, weekEnd)), ""],
+    ["МЕСЯЦ", total(inRange(monthStart, monthEnd)), " highlight"],
+    ["ГОД", total(inRange(yearStart, yearEnd)), ""]
+  ];
+  $("summary").innerHTML = cards.map(function (c) {
+    return '<div class="sum-card' + c[2] + '"><small>' + c[0] + '</small><div class="val">' + esc(fmt(c[1])) + "</div></div>";
+  }).join("");
+}
+
+function renderMonth() {
+  var y = viewMonth.getFullYear(), m = viewMonth.getMonth();
+  $("monthLabel").textContent = MONTHS[m] + " " + y;
+  var start = new Date(y, m, 1), end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+  var monthExps = inRange(start, end);
+  $("monthTotal").textContent = fmt(total(monthExps));
+
+  var byCat = {};
+  monthExps.forEach(function (e) { byCat[e.category] = (byCat[e.category] || 0) + e.cents; });
+  var vals = Object.keys(byCat).map(function (k) { return byCat[k]; });
+  var max = Math.max.apply(null, vals.concat([1]));
+  var container = $("byCategories");
+  container.innerHTML = "";
+  Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; }).forEach(function (cat) {
+    var row = document.createElement("div");
+    row.className = "cat-row";
+    row.innerHTML = "<span>" + esc(cat) + "</span><span>" + esc(fmt(byCat[cat])) + "</span>";
+    var bar = document.createElement("div");
+    bar.className = "bar";
+    bar.innerHTML = '<div style="width:' + ((byCat[cat] / max) * 100).toFixed(1) + '%"></div>';
+    container.appendChild(row); container.appendChild(bar);
+  });
+  if (!vals.length) container.innerHTML = '<div class="empty">Нет расходов в этом месяце</div>';
+
+  var list = $("recordsList");
+  list.innerHTML = "";
+  var sorted = monthExps.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+  if (!sorted.length) { list.innerHTML = '<div class="empty">Записей пока нет</div>'; return; }
+  sorted.forEach(function (e) {
+    var d = new Date(e.date);
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "record";
+    btn.setAttribute("data-id", e.id);
+    btn.innerHTML = '<div><div class="title">' + esc(e.category) + (e.note && e.note !== e.category ? " · " + esc(e.note) : "") +
+      '</div><div class="meta">' + esc(d.toLocaleDateString("ru-RU")) + " " +
+      esc(d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })) + " · изменить</div></div><strong>" + esc(fmt(e.cents)) + "</strong>";
+    btn.onclick = function () { openEdit(e.id); };
+    list.appendChild(btn);
+  });
+}
+
+function render() { renderCategories(); renderSummary(); renderMonth(); }
+
+// ---------- sheets ----------
+function openSheet(id) { $(id).classList.add("open"); }
+function closeSheet(id) { $(id).classList.remove("open"); }
+Array.prototype.forEach.call(document.querySelectorAll("[data-close]"), function (b) {
+  b.onclick = function () { closeSheet(b.getAttribute("data-close")); };
+});
+Array.prototype.forEach.call(document.querySelectorAll(".overlay"), function (o) {
+  o.addEventListener("click", function (ev) { if (ev.target === o) closeSheet(o.id); });
+});
+
+// ---------- редактирование ----------
+var editingId = null;
+function fillCatSelect(sel, current) {
+  sel.innerHTML = "";
+  var list = categories.slice();
+  if (current && list.indexOf(current) < 0) list.push(current);
+  list.forEach(function (c) { var o = document.createElement("option"); o.value = c; o.textContent = c; if (c === current) o.selected = true; sel.appendChild(o); });
+}
+function openEdit(id) {
+  var e = expenses.find(function (x) { return x.id === id; });
+  if (!e) return;
+  editingId = id;
+  $("editAmount").value = centsToField(e.cents);
+  fillCatSelect($("editCategory"), e.category);
+  $("editDate").value = toDateInput(new Date(e.date));
+  $("editNote").value = e.note || "";
+  $("editMsg").textContent = "";
+  openSheet("editOverlay");
+}
+$("editSave").onclick = function () {
+  var e = expenses.find(function (x) { return x.id === editingId; });
+  if (!e) return closeSheet("editOverlay");
+  var cents = zlParseAmountField($("editAmount").value);
+  if (!cents) { $("editMsg").textContent = "Введи сумму, например 87,40"; return; }
+  var dv = $("editDate").value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dv)) { $("editMsg").textContent = "Укажи дату"; return; }
+  var old = new Date(e.date);
+  var p = dv.split("-").map(Number);
+  var nd = new Date(p[0], p[1] - 1, p[2], old.getHours(), old.getMinutes(), old.getSeconds());
+  e.cents = cents; e.category = $("editCategory").value; e.date = nd.toISOString(); e.note = $("editNote").value.trim();
+  closeSheet("editOverlay");
+  save();
+  showMsg("✓ Запись изменена", "ok");
+};
+$("editDelete").onclick = function () {
+  var e = expenses.find(function (x) { return x.id === editingId; });
+  if (!e) return closeSheet("editOverlay");
+  if (!confirm("Удалить запись " + fmt(e.cents) + " · " + e.category + "?")) return;
+  expenses = expenses.filter(function (x) { return x.id !== editingId; });
+  closeSheet("editOverlay");
+  save();
+  showMsg("Запись удалена", "ok");
+};
+
+// ---------- направления ----------
+function renderCatManage() {
+  var box = $("catManageList");
+  box.innerHTML = "";
+  categories.forEach(function (cat, idx) {
+    var row = document.createElement("div");
+    row.className = "cat-manage-row";
+    var inp = document.createElement("input");
+    inp.type = "text"; inp.value = cat; inp.setAttribute("enterkeyhint", "done");
+    var count = expenses.filter(function (e) { return e.category === cat; }).length;
+    var ok = document.createElement("button");
+    ok.type = "button"; ok.className = "icon-btn"; ok.textContent = "✓"; ok.title = "Переименовать";
+    ok.onclick = function () { renameCat(idx, inp.value); };
+    inp.onkeydown = function (ev) { if (ev.key === "Enter") renameCat(idx, inp.value); };
+    row.appendChild(inp); row.appendChild(ok);
+    if (cat !== "Другое") {
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "icon-btn del"; del.textContent = "🗑"; del.title = "Удалить";
+      del.onclick = function () {
+        if (!confirm("Удалить направление «" + cat + "»?" + (count ? " " + count + " зап. перейдут в «Другое»." : ""))) return;
+        expenses.forEach(function (e) { if (e.category === cat) e.category = "Другое"; });
+        categories.splice(idx, 1);
+        if (selectedCat === cat) selectedCat = null;
+        saveCats(); save(); renderCatManage();
+      };
+      row.appendChild(del);
+    } else {
+      inp.disabled = true; ok.disabled = true;
+    }
+    box.appendChild(row);
+  });
+}
+function renameCat(idx, name) {
+  name = String(name || "").trim().replace(/\s+/g, " ");
+  var old = categories[idx];
+  $("catMsg").textContent = "";
+  if (!name || name === old) return;
+  if (name.length > 30) { $("catMsg").textContent = "Слишком длинное название"; return; }
+  if (categories.some(function (c, i) { return i !== idx && c.toLowerCase() === name.toLowerCase(); })) { $("catMsg").textContent = "Такое направление уже есть"; return; }
+  categories[idx] = name;
+  expenses.forEach(function (e) { if (e.category === old) e.category = name; });
+  if (selectedCat === old) selectedCat = name;
+  saveCats(); save(); renderCatManage();
+}
+$("addCat").onclick = function () {
+  var name = $("newCatName").value.trim().replace(/\s+/g, " ");
+  $("catMsg").textContent = "";
+  if (!name) return;
+  if (name.length > 30) { $("catMsg").textContent = "Слишком длинное название"; return; }
+  if (categories.some(function (c) { return c.toLowerCase() === name.toLowerCase(); })) { $("catMsg").textContent = "Такое направление уже есть"; return; }
+  categories.splice(categories.length - 1, 0, name); // перед «Другое»
+  $("newCatName").value = "";
+  saveCats(); render(); renderCatManage();
+};
+$("newCatName").onkeydown = function (ev) { if (ev.key === "Enter") $("addCat").click(); };
+$("btnDirections").onclick = function () {
+  renderCatManage();
+  $("langSelect").value = settings.lang;
+  $("voiceMode").value = settings.voiceMode;
+  $("envNote").textContent = envDescription();
+  $("dataMsg").textContent = "";
+  openSheet("catOverlay");
+};
+$("langSelect").onchange = function () { settings.lang = this.value; saveSettings(); };
+$("voiceMode").onchange = function () { settings.voiceMode = this.value; voiceBroken = false; saveSettings(); updateVoiceUi(); };
+
+// ---------- экспорт / импорт ----------
+function deliverFile(name, mime, content) {
+  var blob = new Blob([content], { type: mime });
+  try {
+    var file = new File([blob], name, { type: mime });
+    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] }) && isIOS) {
+      navigator.share({ files: [file], title: name }).catch(function () {});
+      return;
+    }
+  } catch (e) {}
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+}
+function stamp() { return toDateInput(new Date()); }
+$("exportCsv").onclick = function () {
+  function q(s) { s = String(s == null ? "" : s); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  var rows = [["Дата", "Сумма", "Категория", "Описание"].join(";")];
+  expenses.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); }).forEach(function (e) {
+    rows.push([toDateInput(new Date(e.date)), (e.cents / 100).toFixed(2).replace(".", ","), q(e.category), q(e.note)].join(";"));
+  });
+  deliverFile("zlotnik-" + stamp() + ".csv", "text/csv;charset=utf-8", "\ufeff" + rows.join("\r\n"));
+  $("dataMsg").textContent = "CSV: " + expenses.length + " зап.";
+};
+$("exportJson").onclick = function () {
+  var data = { app: "zlotnik", version: 2, exported: new Date().toISOString(), categories: categories, expenses: expenses };
+  deliverFile("zlotnik-backup-" + stamp() + ".json", "application/json", JSON.stringify(data, null, 1));
+  $("dataMsg").textContent = "Резервная копия: " + expenses.length + " зап.";
+};
+$("importJsonBtn").onclick = function () { $("importJson").value = ""; $("importJson").click(); };
+$("importJson").onchange = function () {
+  var f = this.files && this.files[0];
+  if (!f) return;
+  var r = new FileReader();
+  r.onload = function () {
+    try {
+      var data = JSON.parse(r.result);
+      var list = Array.isArray(data) ? data : data.expenses;
+      if (!Array.isArray(list)) throw new Error("bad");
+      var incoming = list.map(normalizeExpense).filter(Boolean);
+      var ids = {}; expenses.forEach(function (e) { ids[e.id] = true; });
+      var added = 0;
+      incoming.forEach(function (e) { if (!ids[e.id]) { expenses.push(e); ids[e.id] = true; added++; } });
+      var cats = Array.isArray(data.categories) ? data.categories : [];
+      cats.concat(incoming.map(function (e) { return e.category; })).forEach(function (c) {
+        if (typeof c === "string" && c && categories.indexOf(c) < 0) categories.splice(categories.length - 1, 0, c);
+      });
+      saveCats(); save(); renderCatManage();
+      $("dataMsg").textContent = "Восстановлено: добавлено " + added + " зап. (дубликаты пропущены)";
+    } catch (e) {
+      $("dataMsg").textContent = "Не удалось прочитать файл — это не резервная копия Злотника.";
+    }
+  };
+  r.readAsText(f);
+};
+
+// ---------- ввод ----------
+$("btnSave").onclick = function () { stopListening(true); addExpense($("input").value); };
+$("input").addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); addExpense($("input").value); }
+});
+$("prevMonth").onclick = function () { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); renderMonth(); };
+$("nextMonth").onclick = function () { viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); renderMonth(); };
+
+// =====================================================================
+// ГОЛОСОВОЙ ВВОД
+// =====================================================================
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+var ua = navigator.userAgent || "";
+var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+var isAndroid = /Android/i.test(ua);
+var isStandalone = window.navigator.standalone === true ||
+  (window.matchMedia && (window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: fullscreen)").matches));
+var inIframe = (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
+var isFile = location.protocol === "file:";
+var insecure = !window.isSecureContext;
+
+var rec = null, listening = false, starting = false, userStopped = false, errorShown = false;
+var voiceBroken = false;  // распознавание упало в этой сессии — кнопка работает через клавиатуру
+var finalParts = [], lastAlternatives = [], interimText = "";
+var silenceTimer = null, startWatchdog = null, maxTimer = null;
+
+function envDescription() {
+  var parts = [];
+  if (!SR) parts.push("Этот браузер не поддерживает распознавание речи.");
+  if (isFile) parts.push("Страница открыта как файл (file://) — распознавание работает только по https.");
+  else if (insecure) parts.push("Страница открыта не по https — браузер запретит микрофон.");
+  if (inIframe) parts.push("Приложение открыто внутри другой страницы (превью/iframe) — микрофон там часто заблокирован. Открой ссылку напрямую.");
+  if (isIOS && isStandalone) parts.push("Открыто с иконки «Домой»: в этом режиме iOS часто не даёт распознавание речи. Если 🎤 не слушает, выбери «Микрофон клавиатуры телефона» или открой ссылку в Safari.");
+  if (voiceBroken) parts.push("В этой сессии распознавание не запустилось — 🎤 открывает клавиатуру.");
+  return parts.length ? parts.join(" ") : "Распознавание речи доступно. Язык можно поменять выше.";
+}
+
+function keyboardMode() {
+  return settings.voiceMode === "keyboard" || voiceBroken || !SR || isFile || insecure;
+}
+
+function updateVoiceUi() {
+  var b = $("btnVoice"), inp = $("input");
+  b.classList.toggle("listening", listening);
+  inp.classList.toggle("listening", listening);
+  b.classList.toggle("keyboard", !listening && keyboardMode());
+  b.textContent = listening ? "■" : "🎤";
+  b.setAttribute("aria-label", listening ? "Остановить запись" : "Голосовой ввод");
+  b.setAttribute("aria-pressed", listening ? "true" : "false");
+}
+
+var KEYBOARD_HINT = "Нажми 🎤 на клавиатуре и продиктуй, например: продукты 70. Потом нажми «Готово» или «Записать».";
+
+function useKeyboardDictation(reason) {
+  // ВАЖНО: вызывается синхронно из обработчика нажатия — только так iOS откроет клавиатуру.
+  var inp = $("input");
+  inp.focus();
+  try { var l = inp.value.length; inp.setSelectionRange(l, l); } catch (e) {}
+  showMsg((reason ? reason + " " : "") + KEYBOARD_HINT, "info", true);
+}
+
+function markBroken(why) {
+  voiceBroken = true;
+  if (isIOS && isStandalone && settings.voiceMode !== "keyboard") { settings.voiceMode = "keyboard"; saveSettings(); }
+  updateVoiceUi();
+}
+
+var ERR = {
+  "no-speech": "Я ничего не услышал. Нажми 🎤 и говори сразу, ближе к телефону.",
+  "audio-capture": "Микрофон недоступен: его занимает другое приложение или он не найден. Закрой звонок/диктофон и попробуй ещё раз.",
+  "not-allowed": null, "service-not-allowed": null,
+  "network": "Нет связи с сервисом распознавания (нужен интернет). Проверь сеть или продиктуй через микрофон клавиатуры.",
+  "language-not-supported": "Этот язык распознавания не поддерживается. Выбери другой в «Направления» → Голосовой ввод.",
+  "bad-grammar": "Ошибка распознавания. Попробуй ещё раз.",
+  "aborted": null
+};
+function deniedText() {
+  if (isIOS && isStandalone) return "С иконки на экране «Домой» iOS не даёт сайту распознавание речи.";
+  if (inIframe) return "Микрофон заблокирован: приложение открыто внутри превью/чужой страницы. Открой ссылку напрямую в Safari или Chrome.";
+  if (isIOS) return "Нет доступа к микрофону или распознаванию речи. Разреши: Настройки → Safari → Микрофон, а также Настройки → Конфиденциальность → Распознавание речи (и включи Siri и Диктовку).";
+  return "Нет доступа к микрофону. Разреши микрофон для этого сайта (значок 🔒 рядом с адресом) и попробуй ещё раз.";
+}
+
+function clearTimers() { clearTimeout(silenceTimer); clearTimeout(startWatchdog); clearTimeout(maxTimer); }
+
+function currentTranscript() {
+  return (finalParts.join(" ") + " " + interimText).replace(/\s+/g, " ").trim();
+}
+
+function createRecognition() {
+  var r = new SR();
+  r.lang = settings.lang || "ru-RU";
+  r.interimResults = true;
+  r.maxAlternatives = 3;
+  // На Android Chrome continuous=true дублирует фразы — там сессия завершается сама после паузы.
+  r.continuous = !isAndroid;
+
+  r.onstart = function () {
+    starting = false; listening = true; clearTimeout(startWatchdog);
+    updateVoiceUi();
+    showMsg("● Слушаю… говори: «продукты 70». Нажми ■, чтобы закончить.", "rec", true);
+    maxTimer = setTimeout(function () { stopListening(false); }, 20000);
+  };
+  r.onaudiostart = function () { clearTimeout(startWatchdog); };
+  r.onspeechstart = function () { showMsg("● Слышу…", "rec", true); };
+  r.onresult = function (ev) {
+    var finals = [], interim = "", alts = [];
+    for (var i = 0; i < ev.results.length; i++) {
+      var res = ev.results[i];
+      if (res.isFinal) {
+        finals.push(res[0].transcript);
+        alts = [];  // альтернативы последнего финального фрагмента
+        for (var a = 0; a < res.length; a++) alts.push(res[a].transcript);
+      } else {
+        interim += res[0].transcript;
+      }
+    }
+    finalParts = finals; lastAlternatives = alts; interimText = interim;
+    $("input").value = currentTranscript();
+    // пауза ~1.6 с после финального результата — завершаем
+    clearTimeout(silenceTimer);
+    if (!interim && finals.length) silenceTimer = setTimeout(function () { stopListening(false); }, 1600);
+    else silenceTimer = setTimeout(function () { stopListening(false); }, 3000);
+  };
+  r.onnomatch = function () { /* обработаем в onend */ };
+  r.onerror = function (ev) {
+    var code = ev.error || "unknown";
+    if (code === "aborted" && userStopped) return;
+    if (code === "not-allowed" || code === "service-not-allowed") {
+      markBroken(code);
+      errorShown = true;
+      showMsg(deniedText() + " Нажми 🎤 ещё раз — откроется клавиатура: там тоже есть микрофон 🎤 для диктовки.", "error", true);
+      return;
+    }
+    if (code === "no-speech" && currentTranscript()) return; // что-то уже услышали
+    errorShown = true;
+    showMsg(ERR[code] || ("Ошибка распознавания (" + code + "). Попробуй ещё раз или продиктуй через клавиатуру."), "error", true);
+  };
+  r.onend = function () {
+    clearTimers();
+    var wasListening = listening || starting;
+    listening = false; starting = false; rec = null;
+    updateVoiceUi();
+    if (!wasListening) return;
+    finishDictation();
+  };
+  return r;
+}
+
+function finishDictation() {
+  var base = finalParts.slice(0, -1).join(" ");
+  var candidates = [];
+  if (lastAlternatives.length) lastAlternatives.forEach(function (alt) { candidates.push((base + " " + alt).trim()); });
+  var tr = currentTranscript();
+  if (tr && candidates.indexOf(tr) < 0) candidates.unshift(tr);
+  finalParts = []; lastAlternatives = []; interimText = "";
+  candidates = candidates.filter(Boolean);
+  if (!candidates.length) {
+    if (!errorShown) showMsg("Я ничего не услышал. Нажми 🎤 и скажи, например: «продукты 70».", "error", true);
+    return;
+  }
+  for (var i = 0; i < candidates.length; i++) {
+    var p = zlParse(candidates[i], categories);
+    if (p.hasAmount) { $("input").value = candidates[i]; addExpense(candidates[i], p); return; }
+  }
+  $("input").value = candidates[0];
+  showMsg("Услышал «" + candidates[0] + "», но не нашёл сумму. Допиши сумму и нажми «Записать».", "error", true);
+}
+
+function stopListening(silent) {
+  clearTimers();
+  if (!rec) return;
+  userStopped = !!silent;
+  try { if (silent) rec.abort(); else rec.stop(); } catch (e) {}
+  if (silent) { listening = false; starting = false; rec = null; updateVoiceUi(); }
+}
+
+function startRecognition() {
+  finalParts = []; lastAlternatives = []; interimText = ""; userStopped = false; errorShown = false;
+  try {
+    rec = createRecognition();
+    starting = true;
+    rec.start();
+  } catch (e) {
+    rec = null; starting = false;
+    if (e && e.name === "InvalidStateError") { showMsg("Микрофон уже запущен — подожди секунду и нажми ещё раз.", "error"); return; }
+    markBroken("start-failed");
+    showMsg("Не удалось включить распознавание речи. Нажми 🎤 ещё раз — откроется клавиатура с микрофоном.", "error", true);
+    return;
+  }
+  showMsg("Включаю микрофон…", "info", true);
+  updateVoiceUi();
+  // если за 6 с распознавание так и не стартовало (бывает в iOS standalone / webview) — считаем недоступным
+  startWatchdog = setTimeout(function () {
+    if (starting && !listening) {
+      try { rec && rec.abort(); } catch (e) {}
+      rec = null; starting = false;
+      markBroken("timeout");
+      updateVoiceUi();
+      showMsg("Распознавание речи не запустилось в этом режиме. Нажми 🎤 ещё раз — откроется клавиатура, там нажми её 🎤 и продиктуй.", "error", true);
+    }
+  }, 6000);
+}
+
+$("btnVoice").addEventListener("click", function () {
+  if (listening || starting) { stopListening(false); return; }
+  if (keyboardMode()) {
+    var reason = "";
+    if (!SR) reason = isIOS && isStandalone ? "С иконки «Домой» распознавание недоступно." : "Этот браузер не умеет распознавать речь.";
+    else if (isFile || insecure) reason = "Распознавание работает только на сайте по https.";
+    useKeyboardDictation(reason);
+    return;
+  }
+  // Первый раз запросим системный доступ к микрофону, чтобы появился запрос разрешения.
+  // На iOS распознавание запускаем синхронно в нажатии (Safari сам спросит микрофон и «Распознавание речи»).
+  if (!isIOS && !settings.micGranted && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    showMsg("Разреши доступ к микрофону…", "info", true);
+    starting = true; updateVoiceUi();
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      settings.micGranted = true; saveSettings();
+      starting = false;
+      startRecognition();
+    }).catch(function (err) {
+      starting = false; updateVoiceUi();
+      var n = err && err.name;
+      if (n === "NotAllowedError" || n === "SecurityError") {
+        markBroken("denied");
+        showMsg(deniedText() + " Нажми 🎤 ещё раз — откроется клавиатура с микрофоном.", "error", true);
+      } else if (n === "NotFoundError" || n === "NotReadableError" || n === "OverconstrainedError") {
+        showMsg(ERR["audio-capture"], "error", true);
+      } else {
+        startRecognition(); // неизвестная ошибка — пробуем распознавание напрямую
+      }
+    });
+    return;
+  }
+  startRecognition();
+});
+
+// если доступ к микрофону отозвали — снова спросим
+if (navigator.permissions && navigator.permissions.query) {
+  try {
+    navigator.permissions.query({ name: "microphone" }).then(function (st) {
+      if (st.state !== "granted" && settings.micGranted) { settings.micGranted = false; saveSettings(); }
+    }).catch(function () {});
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", function () { if (document.hidden) stopListening(true); });
+
+if (keyboardMode()) $("hint").textContent = "Нажми 🎤 — откроется клавиатура, там нажми её 🎤 и скажи: «продукты 70», «вчера кофе 18».";
+updateVoiceUi();
+render();
+
+window.__zl = { get expenses() { return expenses; }, get categories() { return categories; }, fmt: fmt, env: envDescription };
+})();
+</script>
+</body>
+</html>
