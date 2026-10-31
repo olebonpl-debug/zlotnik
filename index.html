@@ -221,9 +221,16 @@
       </select>
       <label class="lbl" for="voiceMode">Кнопка 🎤</label>
       <select id="voiceMode">
+        <option value="openai">Запись + OpenAI (надёжно)</option>
         <option value="auto">Распознавание в браузере</option>
         <option value="keyboard">Микрофон клавиатуры телефона</option>
       </select>
+      <label class="lbl" for="oaKey">Ключ OpenAI (хранится только на этом телефоне)</label>
+      <div class="cat-manage-row">
+        <input type="password" id="oaKey" placeholder="sk-…" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="icon-btn" type="button" id="oaSave" aria-label="Сохранить ключ">✓</button>
+      </div>
+      <div class="msg" id="oaMsg"></div>
       <div class="env-note" id="envNote"></div>
     </div>
 
@@ -750,12 +757,31 @@ $("btnDirections").onclick = function () {
   renderCatManage();
   $("langSelect").value = settings.lang;
   $("voiceMode").value = settings.voiceMode;
+  $("oaKey").value = settings.oaKey ? "••••••••" + settings.oaKey.slice(-4) : "";
+  $("oaMsg").textContent = settings.oaKey ? "Ключ сохранён." : "";
   $("envNote").textContent = envDescription();
   $("dataMsg").textContent = "";
   openSheet("catOverlay");
 };
 $("langSelect").onchange = function () { settings.lang = this.value; saveSettings(); };
-$("voiceMode").onchange = function () { settings.voiceMode = this.value; voiceBroken = false; saveSettings(); updateVoiceUi(); };
+$("voiceMode").onchange = function () { settings.voiceMode = this.value; voiceBroken = false; saveSettings(); updateVoiceUi(); $("envNote").textContent = envDescription(); };
+$("oaKey").onfocus = function () { if (this.value.indexOf("••") === 0) this.value = ""; };
+$("oaSave").onclick = function () {
+  var k = $("oaKey").value.trim();
+  if (k.indexOf("••") === 0) return;
+  if (!k) { settings.oaKey = ""; if (settings.voiceMode === "openai") settings.voiceMode = "auto"; saveSettings(); $("voiceMode").value = settings.voiceMode; $("oaMsg").textContent = "Ключ удалён."; updateVoiceUi(); return; }
+  if (!/^sk-/.test(k)) { $("oaMsg").textContent = "Ключ должен начинаться с sk-"; return; }
+  $("oaMsg").textContent = "Проверяю ключ…";
+  fetch("https://api.openai.com/v1/models/gpt-4o-mini-transcribe", { headers: { Authorization: "Bearer " + k } })
+    .then(function (r) {
+      if (r.status === 401) { $("oaMsg").textContent = "Ключ не подошёл (неверный). Скопируй его ещё раз."; return; }
+      settings.oaKey = k; settings.voiceMode = "openai"; saveSettings();
+      $("voiceMode").value = "openai"; $("oaKey").value = "••••••••" + k.slice(-4);
+      $("oaMsg").textContent = "✓ Ключ сохранён. Кнопка 🎤 теперь записывает и распознаёт через OpenAI."; $("envNote").textContent = envDescription();
+      updateVoiceUi();
+    })
+    .catch(function () { $("oaMsg").textContent = "Нет связи с OpenAI. Проверь интернет и попробуй ещё раз."; });
+};
 
 // ---------- экспорт / импорт ----------
 function deliverFile(name, mime, content) {
@@ -842,6 +868,8 @@ var finalParts = [], lastAlternatives = [], interimText = "";
 var silenceTimer = null, startWatchdog = null, maxTimer = null;
 
 function envDescription() {
+  if (cloudMode()) return "Кнопка 🎤 записывает звук и распознаёт его через OpenAI. Работает и с иконки «Домой».";
+  if (settings.voiceMode === "openai" && !settings.oaKey) return "Вставь ключ OpenAI ниже и нажми ✓.";
   var parts = [];
   if (!SR) parts.push("Этот браузер не поддерживает распознавание речи.");
   if (isFile) parts.push("Страница открыта как файл (file://) — распознавание работает только по https.");
@@ -853,6 +881,7 @@ function envDescription() {
 }
 
 function keyboardMode() {
+  if (cloudMode()) return false;
   return settings.voiceMode === "keyboard" || !SR || isFile || insecure;
 }
 
@@ -1050,7 +1079,105 @@ function startRecognition() {
   }, 5000);
 }
 
+// ---------- Запись звука + распознавание OpenAI ----------
+function cloudMode() { return settings.voiceMode === "openai" && !!settings.oaKey && !!(navigator.mediaDevices && window.MediaRecorder); }
+var cl = { stream: null, rec: null, chunks: [], ctx: null, timer: null, maxT: null, releaseT: null, busy: false, spoke: false };
+function clLang() { return (settings.lang || "ru-RU").slice(0, 2); }
+function clPrompt() { return "Расходы в злотых. Направления: " + categories.join(", ") + ". Пример: продукты 70, вчера кофе 18, бедронка 87,40."; }
+function clRelease() {
+  clearTimeout(cl.releaseT);
+  if (cl.stream) { cl.stream.getTracks().forEach(function (t) { t.stop(); }); cl.stream = null; }
+  if (cl.ctx) { try { cl.ctx.close(); } catch (e) {} cl.ctx = null; }
+}
+function clGetStream() {
+  if (cl.stream && cl.stream.getAudioTracks().some(function (t) { return t.readyState === "live"; })) return Promise.resolve(cl.stream);
+  return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(function (s) { cl.stream = s; return s; });
+}
+function clStart() {
+  if (cl.busy) return;
+  cl.busy = true; starting = true; updateVoiceUi();
+  showMsg("Включаю микрофон…", "info", true);
+  clearTimeout(cl.releaseT);
+  clGetStream().then(function (stream) {
+    var mime = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg"].filter(function (m) { return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m); })[0] || "";
+    var mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    cl.rec = mr; cl.chunks = []; cl.spoke = false;
+    mr.ondataavailable = function (e) { if (e.data && e.data.size) cl.chunks.push(e.data); };
+    mr.onstop = function () { clFinish(mr.mimeType || mime || "audio/mp4"); };
+    mr.start();
+    starting = false; listening = true; updateVoiceUi();
+    showMsg("● Слушаю… говори: «продукты 70». Нажми ■, чтобы закончить.", "rec", true);
+    clWatchSilence(stream);
+    cl.maxT = setTimeout(clStop, 15000);
+  }).catch(function (err) {
+    cl.busy = false; starting = false; listening = false; updateVoiceUi();
+    var n = err && err.name;
+    if (n === "NotAllowedError" || n === "SecurityError") showMsg("Нет доступа к микрофону. Разреши: Настройки → Safari → Микрофон (или нажми «аА» в адресной строке → Настройки сайта → Микрофон → Разрешить).", "error", true);
+    else showMsg(ERR["audio-capture"], "error", true);
+  });
+}
+// автостоп: после речи 1.5 с тишины
+function clWatchSilence(stream) {
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    if (!cl.ctx) cl.ctx = new AC();
+    if (cl.ctx.state === "suspended") cl.ctx.resume();
+    var src = cl.ctx.createMediaStreamSource(stream), an = cl.ctx.createAnalyser();
+    an.fftSize = 1024; src.connect(an);
+    var buf = new Uint8Array(an.fftSize), quietSince = Date.now(), startT = Date.now();
+    clearInterval(cl.timer);
+    cl.timer = setInterval(function () {
+      if (!listening) { clearInterval(cl.timer); try { src.disconnect(); } catch (e) {} return; }
+      an.getByteTimeDomainData(buf);
+      var sum = 0; for (var i = 0; i < buf.length; i++) { var v = (buf[i] - 128) / 128; sum += v * v; }
+      var rms = Math.sqrt(sum / buf.length), now = Date.now();
+      if (rms > 0.035) { if (!cl.spoke) showMsg("● Слышу…", "rec", true); cl.spoke = true; quietSince = now; }
+      if (cl.spoke && now - quietSince > 1500) clStop();
+      else if (!cl.spoke && now - startT > 7000) clStop();
+    }, 120);
+  } catch (e) {}
+}
+function clStop() {
+  clearTimeout(cl.maxT); clearInterval(cl.timer);
+  listening = false; updateVoiceUi();
+  if (cl.rec && cl.rec.state !== "inactive") { try { cl.rec.stop(); } catch (e) { clFinish("audio/mp4"); } }
+}
+function clFinish(mime) {
+  var blob = new Blob(cl.chunks, { type: mime }); cl.chunks = []; cl.rec = null;
+  // держим микрофон открытым минуту, чтобы следующая запись стартовала мгновенно
+  cl.releaseT = setTimeout(clRelease, 60000);
+  if (blob.size < 2000) { cl.busy = false; showMsg("Я ничего не услышал. Нажми 🎤 и говори сразу.", "error", true); return; }
+  showMsg("Распознаю…", "info", true);
+  var ext = /mp4|m4a|aac/.test(mime) ? "m4a" : /ogg/.test(mime) ? "ogg" : "webm";
+  var fd = new FormData();
+  fd.append("file", blob, "voice." + ext);
+  fd.append("model", "gpt-4o-mini-transcribe");
+  fd.append("language", clLang());
+  fd.append("prompt", clPrompt());
+  fd.append("response_format", "json");
+  fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + settings.oaKey }, body: fd })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+    .then(function (res) {
+      cl.busy = false;
+      if (!res.ok) {
+        var m = (res.j && res.j.error && res.j.error.message) || ("код " + res.status);
+        if (res.status === 401) showMsg("OpenAI не принял ключ. Вставь ключ заново в «Направления».", "error", true);
+        else if (res.status === 429) showMsg("OpenAI: закончился баланс или лимит. Пополни Billing на platform.openai.com.", "error", true);
+        else showMsg("Ошибка распознавания: " + m, "error", true);
+        return;
+      }
+      var text = String((res.j && res.j.text) || "").replace(/[.!?]+$/, "").trim();
+      if (!text) { showMsg("Я ничего не разобрал. Нажми 🎤 и скажи ещё раз.", "error", true); return; }
+      var p = zlParse(text, categories);
+      if (p.hasAmount) { $("input").value = text; addExpense(text, p); return; }
+      $("input").value = text;
+      showMsg("Услышал «" + text + "», но не нашёл сумму. Допиши сумму и нажми «Записать».", "error", true);
+    })
+    .catch(function () { cl.busy = false; showMsg("Нет интернета — не удалось распознать. Попробуй ещё раз.", "error", true); });
+}
+
 $("btnVoice").addEventListener("click", function () {
+  if (cloudMode()) { if (listening) clStop(); else if (!starting && !cl.busy) clStart(); return; }
   if (listening || starting) { stopListening(false); return; }
   if (keyboardMode()) {
     var reason = "";
@@ -1094,7 +1221,7 @@ if (navigator.permissions && navigator.permissions.query) {
     }).catch(function () {});
   } catch (e) {}
 }
-document.addEventListener("visibilitychange", function () { if (document.hidden) stopListening(true); });
+document.addEventListener("visibilitychange", function () { if (document.hidden) { if (cloudMode()) { if (listening) clStop(); clRelease(); } else stopListening(true); } });
 
 if (keyboardMode()) $("hint").textContent = "Нажми 🎤 — откроется клавиатура, там нажми её 🎤 и скажи: «продукты 70», «вчера кофе 18».";
 updateVoiceUi();
