@@ -472,7 +472,7 @@ if (categories.indexOf("Другое") < 0) categories.push("Другое");
 
 var settings = Object.assign({ lang: "ru-RU", voiceMode: "auto", micGranted: false }, load(KEY_SET, {}));
 // v2: сбрасываем режим «только клавиатура», который старая версия могла включить сама
-if (settings.mic2 !== true) { settings.voiceMode = "auto"; settings.mic2 = true; try { localStorage.setItem(KEY_SET, JSON.stringify(settings)); } catch (e) {} }
+if (settings.mic3 !== true) { settings.voiceMode = "auto"; settings.mic3 = true; try { localStorage.setItem(KEY_SET, JSON.stringify(settings)); } catch (e) {} }
 
 function normalizeExpense(e) {
   if (!e || typeof e !== "object") return null;
@@ -848,12 +848,12 @@ function envDescription() {
   else if (insecure) parts.push("Страница открыта не по https — браузер запретит микрофон.");
   if (inIframe) parts.push("Приложение открыто внутри другой страницы (превью/iframe) — микрофон там часто заблокирован. Открой ссылку напрямую.");
   if (isIOS && isStandalone) parts.push("Открыто с иконки «Домой»: в этом режиме iOS часто не даёт распознавание речи. Если 🎤 не слушает, выбери «Микрофон клавиатуры телефона» или открой ссылку в Safari.");
-  if (voiceBroken) parts.push("В этой сессии распознавание не запустилось — 🎤 открывает клавиатуру.");
+  if (voiceBroken) parts.push("В этой сессии iPhone отказал в распознавании речи.");
   return parts.length ? parts.join(" ") : "Распознавание речи доступно. Язык можно поменять выше.";
 }
 
 function keyboardMode() {
-  return settings.voiceMode === "keyboard" || voiceBroken || !SR || isFile || insecure;
+  return settings.voiceMode === "keyboard" || !SR || isFile || insecure;
 }
 
 function updateVoiceUi() {
@@ -957,7 +957,7 @@ function createRecognition() {
     if (code === "not-allowed" || code === "service-not-allowed") {
       markBroken(code);
       errorShown = true;
-      showMsg(deniedText() + " Нажми 🎤 ещё раз — откроется клавиатура: там тоже есть микрофон 🎤 для диктовки.", "error", true);
+      showMsg(deniedText() + " Пока можно диктовать через 🎤 на клавиатуре телефона.", "error", true);
       return;
     }
     if (code === "no-speech" && currentTranscript()) return;
