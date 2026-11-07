@@ -86,12 +86,52 @@
   .sum-card.highlight { background: var(--accent); color: #fff; }
   .sum-card small { display: block; font-size: 12px; opacity: 0.8; margin-bottom: 4px; letter-spacing: 0.5px; }
   .sum-card .val { font-size: 22px; font-weight: 700; white-space: nowrap; }
+  button.sum-card {
+    text-align: left; border: none; cursor: pointer; width: 100%; font: inherit; color: inherit;
+    position: relative; -webkit-appearance: none; appearance: none;
+  }
+  button.sum-card:active { filter: brightness(0.97); }
+  button.sum-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.sum-card.highlight:focus-visible { outline-color: #fff; }
+  .sum-card .chev { position: absolute; right: 12px; top: 12px; opacity: 0.55; font-size: 20px; line-height: 1; font-weight: 400; }
+  button.cat-hit {
+    display: block; width: 100%; background: transparent; border: none; padding: 8px 4px 4px; margin: 0 0 8px;
+    cursor: pointer; text-align: left; border-radius: 12px; min-height: 44px; font: inherit; color: inherit;
+    -webkit-appearance: none; appearance: none;
+  }
+  button.cat-hit:active { background: var(--soft); }
+  button.cat-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; background: var(--soft); }
+  button.cat-hit .cat-row { margin-bottom: 6px; }
+  button.cat-hit .bar { margin-bottom: 0; }
+  .drill-sub { color: var(--muted); font-size: 13px; margin: -6px 0 10px; }
+  .drill-total-label { font-size: 12px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
+  .drill-total { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+  .drill-count { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+  .drill-kicker, .drill-list-label { font-size: 13px; color: var(--muted); letter-spacing: .4px; text-transform: uppercase; margin: 8px 0 8px; font-weight: 600; }
+  .drill-list-label { margin-top: 16px; }
+  button.drill-cat {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    width: 100%; background: #fff; border: none; border-radius: 14px; padding: 12px 14px; margin-bottom: 8px;
+    cursor: pointer; min-height: 48px; text-align: left; font: inherit; font-size: 15px; color: inherit;
+    -webkit-appearance: none; appearance: none;
+  }
+  button.drill-cat:active { background: var(--soft); }
+  button.drill-cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.drill-cat .name { word-break: break-word; }
+  button.drill-cat .right { white-space: nowrap; }
+  button.drill-cat .chev { color: var(--muted); font-size: 20px; line-height: 1; }
+  #drillOverlay { z-index: 40; }
+  #editOverlay { z-index: 60; }
+  #drillBack[hidden] { display: none !important; }
+  .sheet-head { gap: 8px; }
+  .sheet-head h3 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .month-nav { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 20px; }
   .month-nav button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: #fff; font-size: 18px; cursor: pointer; }
   .month-nav .center { text-align: center; }
   .month-nav .center strong { display: block; }
   .by-cat h3 { margin-bottom: 12px; }
-  .cat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px; }
+  .cat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px; gap: 8px; }
+  .cat-row .chev { color: var(--muted); }
   .bar { height: 6px; background: #e8e2d8; border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
   .bar > div { height: 100%; background: var(--accent); border-radius: 3px; }
   .records { margin-top: 10px; }
@@ -178,6 +218,24 @@
 <div class="records">
   <h3>Записи</h3>
   <div id="recordsList"></div>
+</div>
+
+<!-- Drill-down: period or category totals -->
+<div class="overlay" id="drillOverlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="drillTitle" aria-describedby="drillSub">
+    <div class="sheet-head">
+      <button class="close-x" id="drillBack" type="button" aria-label="Назад" hidden>‹</button>
+      <h3 id="drillTitle"></h3>
+      <button class="close-x" type="button" data-close="drillOverlay" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="drill-sub" id="drillSub"></p>
+    <div class="drill-total-label">Итого</div>
+    <div class="drill-total" id="drillTotal"></div>
+    <div class="drill-count" id="drillCount"></div>
+    <div id="drillCats"></div>
+    <h3 class="drill-list-label" id="drillListLabel">Записи</h3>
+    <div id="drillList"></div>
+  </div>
 </div>
 
 <!-- Edit record sheet -->
@@ -577,11 +635,23 @@ function inRange(start, end) {
   return expenses.filter(function (e) { var d = new Date(e.date); return d >= start && d <= end; });
 }
 function total(arr) { return arr.reduce(function (s, e) { return s + e.cents; }, 0); }
-
-function renderSummary() {
-  var now = new Date();
+function groupByCat(arr) {
+  var byCat = {};
+  arr.forEach(function (e) { byCat[e.category] = (byCat[e.category] || 0) + e.cents; });
+  return byCat;
+}
+function sortedCatKeys(byCat) {
+  return Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; });
+}
+function endOfLocalDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+// Те же локальные границы, что у карточек «Сегодня / Неделя / Месяц / Год»
+// (календарь устройства; на iPhone в Польше это Europe/Warsaw). Неделя с понедельника.
+function summaryPeriods(now) {
+  now = now || new Date();
   var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  var todayEnd = endOfLocalDay(now);
   var dow = (now.getDay() + 6) % 7; // пн=0 … вс=6
   var weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
   var weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6, 23, 59, 59, 999);
@@ -589,69 +659,288 @@ function renderSummary() {
   var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
   var yearStart = new Date(now.getFullYear(), 0, 1);
   var yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-  var cards = [
-    ["СЕГОДНЯ", total(inRange(todayStart, todayEnd)), ""],
-    ["НЕДЕЛЯ", total(inRange(weekStart, weekEnd)), ""],
-    ["МЕСЯЦ", total(inRange(monthStart, monthEnd)), " highlight"],
-    ["ГОД", total(inRange(yearStart, yearEnd)), ""]
-  ];
-  $("summary").innerHTML = cards.map(function (c) {
-    return '<div class="sum-card' + c[2] + '"><small>' + c[0] + '</small><div class="val">' + esc(fmt(c[1])) + "</div></div>";
-  }).join("");
+  return {
+    today: { key: "today", start: todayStart, end: todayEnd, label: "Сегодня", card: "СЕГОДНЯ", highlight: false },
+    week: { key: "week", start: weekStart, end: weekEnd, label: "Неделя", card: "НЕДЕЛЯ", highlight: false },
+    month: { key: "month", start: monthStart, end: monthEnd, label: "Месяц", card: "МЕСЯЦ", highlight: true },
+    year: { key: "year", start: yearStart, end: yearEnd, label: "Год", card: "ГОД", highlight: false }
+  };
+}
+function viewedMonthRange() {
+  var y = viewMonth.getFullYear(), m = viewMonth.getMonth();
+  return { start: new Date(y, m, 1), end: new Date(y, m + 1, 0, 23, 59, 59, 999), label: MONTHS[m] + " " + y };
+}
+function periodSubtitle(p) {
+  if (p.key === "month") return MONTHS[p.start.getMonth()] + " " + p.start.getFullYear();
+  if (p.key === "year") return String(p.start.getFullYear());
+  if (p.key === "today") return p.start.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  var a = p.start, b = p.end;
+  if (a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()) {
+    return a.getDate() + "–" + b.getDate() + " " + a.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  }
+  return a.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + " – " +
+    b.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+function recordsWord(n) {
+  var n10 = n % 10, n100 = n % 100, w = "записей";
+  if (n10 === 1 && n100 !== 11) w = "запись";
+  else if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) w = "записи";
+  return n + " " + w;
+}
+function sortExpensesDesc(arr) {
+  return arr.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+}
+function appendExpenseButton(parent, e) {
+  var d = new Date(e.date);
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "record";
+  btn.setAttribute("data-id", e.id);
+  btn.setAttribute("data-cents", String(e.cents));
+  if (e.note) btn.setAttribute("data-note", e.note);
+  var wrap = document.createElement("div");
+  var title = document.createElement("div");
+  title.className = "title";
+  title.textContent = e.category + (e.note && e.note !== e.category ? " · " + e.note : "");
+  var meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = d.toLocaleDateString("ru-RU") + " " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) + " · изменить";
+  wrap.appendChild(title);
+  wrap.appendChild(meta);
+  var strong = document.createElement("strong");
+  strong.textContent = fmt(e.cents);
+  btn.appendChild(wrap);
+  btn.appendChild(strong);
+  btn.onclick = function () { openEdit(e.id); };
+  parent.appendChild(btn);
+}
+
+function renderSummary() {
+  var periods = summaryPeriods();
+  var box = $("summary");
+  box.innerHTML = "";
+  ["today", "week", "month", "year"].forEach(function (key) {
+    var p = periods[key];
+    var cents = total(inRange(p.start, p.end));
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "sum-card" + (p.highlight ? " highlight" : "");
+    btn.setAttribute("data-period", key);
+    btn.setAttribute("data-cents", String(cents));
+    btn.setAttribute("aria-label", p.label + ", " + fmt(cents) + ". Показать записи");
+    var small = document.createElement("small");
+    small.textContent = p.card;
+    var val = document.createElement("div");
+    val.className = "val";
+    val.textContent = fmt(cents);
+    var chev = document.createElement("span");
+    chev.className = "chev";
+    chev.setAttribute("aria-hidden", "true");
+    chev.textContent = "›";
+    btn.appendChild(small);
+    btn.appendChild(val);
+    btn.appendChild(chev);
+    btn.onclick = function () { openPeriodDrill(key); };
+    box.appendChild(btn);
+  });
 }
 
 function renderMonth() {
-  var y = viewMonth.getFullYear(), m = viewMonth.getMonth();
-  $("monthLabel").textContent = MONTHS[m] + " " + y;
-  var start = new Date(y, m, 1), end = new Date(y, m + 1, 0, 23, 59, 59, 999);
-  var monthExps = inRange(start, end);
+  var range = viewedMonthRange();
+  $("monthLabel").textContent = range.label;
+  var monthExps = inRange(range.start, range.end);
   $("monthTotal").textContent = fmt(total(monthExps));
 
-  var byCat = {};
-  monthExps.forEach(function (e) { byCat[e.category] = (byCat[e.category] || 0) + e.cents; });
-  var vals = Object.keys(byCat).map(function (k) { return byCat[k]; });
-  var max = Math.max.apply(null, vals.concat([1]));
+  var byCat = groupByCat(monthExps);
+  var keys = sortedCatKeys(byCat);
+  var max = Math.max.apply(null, keys.map(function (k) { return byCat[k]; }).concat([1]));
   var container = $("byCategories");
   container.innerHTML = "";
-  Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; }).forEach(function (cat) {
-    var row = document.createElement("div");
-    row.className = "cat-row";
-    row.innerHTML = "<span>" + esc(cat) + "</span><span>" + esc(fmt(byCat[cat])) + "</span>";
-    var bar = document.createElement("div");
-    bar.className = "bar";
-    bar.innerHTML = '<div style="width:' + ((byCat[cat] / max) * 100).toFixed(1) + '%"></div>';
-    container.appendChild(row); container.appendChild(bar);
-  });
-  if (!vals.length) container.innerHTML = '<div class="empty">Нет расходов в этом месяце</div>';
+  if (!keys.length) {
+    container.innerHTML = '<div class="empty">Нет расходов в этом месяце</div>';
+  } else {
+    keys.forEach(function (cat) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cat-hit";
+      btn.setAttribute("data-category", cat);
+      btn.setAttribute("data-cents", String(byCat[cat]));
+      btn.setAttribute("aria-label", cat + ", " + fmt(byCat[cat]) + ". Показать записи");
+      var row = document.createElement("div");
+      row.className = "cat-row";
+      var name = document.createElement("span");
+      name.textContent = cat;
+      var sum = document.createElement("span");
+      sum.appendChild(document.createTextNode(fmt(byCat[cat])));
+      var chev = document.createElement("span");
+      chev.className = "chev";
+      chev.setAttribute("aria-hidden", "true");
+      chev.textContent = " ›";
+      sum.appendChild(chev);
+      row.appendChild(name);
+      row.appendChild(sum);
+      var bar = document.createElement("div");
+      bar.className = "bar";
+      var fill = document.createElement("div");
+      fill.style.width = ((byCat[cat] / max) * 100).toFixed(1) + "%";
+      bar.appendChild(fill);
+      btn.appendChild(row);
+      btn.appendChild(bar);
+      btn.onclick = function () { openCategoryDrill(cat, range, null); };
+      container.appendChild(btn);
+    });
+  }
 
   var list = $("recordsList");
   list.innerHTML = "";
-  var sorted = monthExps.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+  var sorted = sortExpensesDesc(monthExps);
   if (!sorted.length) { list.innerHTML = '<div class="empty">Записей пока нет</div>'; return; }
-  sorted.forEach(function (e) {
-    var d = new Date(e.date);
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "record";
-    btn.setAttribute("data-id", e.id);
-    btn.innerHTML = '<div><div class="title">' + esc(e.category) + (e.note && e.note !== e.category ? " · " + esc(e.note) : "") +
-      '</div><div class="meta">' + esc(d.toLocaleDateString("ru-RU")) + " " +
-      esc(d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })) + " · изменить</div></div><strong>" + esc(fmt(e.cents)) + "</strong>";
-    btn.onclick = function () { openEdit(e.id); };
-    list.appendChild(btn);
-  });
+  sorted.forEach(function (e) { appendExpenseButton(list, e); });
 }
 
-function render() { renderCategories(); renderSummary(); renderMonth(); }
+var drillState = null;
+var drillReturnFocus = null;
+
+function openPeriodDrill(key) {
+  drillState = { mode: "period", key: key };
+  renderDrill();
+  showDrill();
+}
+function openCategoryDrill(cat, range, back) {
+  drillState = {
+    mode: "category",
+    category: cat,
+    start: range.start,
+    end: range.end,
+    scopeLabel: range.label,
+    back: back || null
+  };
+  renderDrill();
+  showDrill();
+}
+function showDrill() {
+  var overlay = $("drillOverlay");
+  if (!overlay.classList.contains("open")) {
+    drillReturnFocus = document.activeElement;
+    openSheet("drillOverlay");
+  }
+  var back = $("drillBack");
+  var target = back && !back.hidden ? back : overlay.querySelector("[data-close]");
+  if (target) target.focus();
+}
+function renderDrill() {
+  if (!drillState) return;
+  var backBtn = $("drillBack");
+  if (drillState.mode === "period") {
+    var p = summaryPeriods()[drillState.key];
+    backBtn.hidden = true;
+    $("drillTitle").textContent = p.label;
+    $("drillSub").textContent = periodSubtitle(p);
+    fillDrill(inRange(p.start, p.end), true, function (cat) {
+      openCategoryDrill(cat, { start: p.start, end: p.end, label: periodSubtitle(p) }, { mode: "period", key: drillState.key });
+    });
+  } else {
+    var items = inRange(drillState.start, drillState.end).filter(function (e) { return e.category === drillState.category; });
+    backBtn.hidden = !drillState.back;
+    $("drillTitle").textContent = drillState.category;
+    $("drillSub").textContent = drillState.scopeLabel;
+    fillDrill(items, false, null);
+  }
+}
+function fillDrill(items, showCats, onCat) {
+  var cents = total(items);
+  var totalEl = $("drillTotal");
+  totalEl.textContent = fmt(cents);
+  totalEl.setAttribute("data-cents", String(cents));
+  $("drillCount").textContent = items.length ? recordsWord(items.length) : "";
+  var catsEl = $("drillCats");
+  catsEl.innerHTML = "";
+  var listLabel = $("drillListLabel");
+  var list = $("drillList");
+  list.innerHTML = "";
+  if (!items.length) {
+    listLabel.hidden = true;
+    var empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = drillState.mode === "period"
+      ? "Нет расходов за этот период"
+      : "В направлении «" + drillState.category + "» нет расходов за этот период";
+    list.appendChild(empty);
+    return;
+  }
+  if (showCats) {
+    var kicker = document.createElement("div");
+    kicker.className = "drill-kicker";
+    kicker.textContent = "По направлениям";
+    catsEl.appendChild(kicker);
+    var byCat = groupByCat(items);
+    sortedCatKeys(byCat).forEach(function (cat) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "drill-cat";
+      btn.setAttribute("data-category", cat);
+      btn.setAttribute("data-cents", String(byCat[cat]));
+      btn.setAttribute("aria-label", cat + ", " + fmt(byCat[cat]) + ". Показать записи");
+      var name = document.createElement("span");
+      name.className = "name";
+      name.textContent = cat;
+      var right = document.createElement("span");
+      right.className = "right";
+      var amount = document.createElement("strong");
+      amount.textContent = fmt(byCat[cat]);
+      var chev = document.createElement("span");
+      chev.className = "chev";
+      chev.setAttribute("aria-hidden", "true");
+      chev.textContent = " ›";
+      right.appendChild(amount);
+      right.appendChild(chev);
+      btn.appendChild(name);
+      btn.appendChild(right);
+      btn.onclick = function () { onCat(cat); };
+      catsEl.appendChild(btn);
+    });
+  }
+  listLabel.hidden = false;
+  sortExpensesDesc(items).forEach(function (e) { appendExpenseButton(list, e); });
+}
+
+function render() {
+  renderCategories();
+  renderSummary();
+  renderMonth();
+  if (drillState && $("drillOverlay").classList.contains("open")) renderDrill();
+}
 
 // ---------- sheets ----------
 function openSheet(id) { $(id).classList.add("open"); }
-function closeSheet(id) { $(id).classList.remove("open"); }
+function closeSheet(id) {
+  $(id).classList.remove("open");
+  if (id === "drillOverlay") {
+    drillState = null;
+    var backTo = drillReturnFocus;
+    drillReturnFocus = null;
+    if (backTo && typeof backTo.focus === "function") {
+      try { backTo.focus(); } catch (e) {}
+    }
+  }
+}
 Array.prototype.forEach.call(document.querySelectorAll("[data-close]"), function (b) {
   b.onclick = function () { closeSheet(b.getAttribute("data-close")); };
 });
 Array.prototype.forEach.call(document.querySelectorAll(".overlay"), function (o) {
   o.addEventListener("click", function (ev) { if (ev.target === o) closeSheet(o.id); });
+});
+$("drillBack").onclick = function () {
+  if (!drillState || !drillState.back) return;
+  drillState = drillState.back;
+  renderDrill();
+  var closeBtn = $("drillOverlay").querySelector("[data-close]");
+  if (closeBtn) closeBtn.focus();
+};
+$("drillOverlay").addEventListener("keydown", function (ev) {
+  if (ev.key !== "Escape") return;
+  if (drillState && drillState.back) $("drillBack").click();
+  else closeSheet("drillOverlay");
 });
 
 // ---------- редактирование ----------
