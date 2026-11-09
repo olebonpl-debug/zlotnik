@@ -78,8 +78,11 @@
   .msg.info { color: var(--muted); }
   .msg.ok { color: var(--ok); }
   .msg.rec { color: #c0392b; font-weight: 600; }
-  .categories { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
-  .cat { background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+  .categories { display: block; margin-bottom: 20px; }
+  .cat-group { margin-bottom: 10px; }
+  .cat-group-label { font-size: 12px; color: var(--muted); letter-spacing: .4px; text-transform: uppercase; margin: 0 4px 6px; font-weight: 700; }
+  .cat-group-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cat { background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 10px 16px; font-size: 14px; cursor: pointer; min-height: 44px; }
   .cat.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
   .sum-card { background: #fff; border-radius: 16px; padding: 16px; }
@@ -129,7 +132,21 @@
   .month-nav button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: #fff; font-size: 18px; cursor: pointer; }
   .month-nav .center { text-align: center; }
   .month-nav .center strong { display: block; }
-  .by-cat h3 { margin-bottom: 12px; }
+  .by-cat h3 { margin-bottom: 4px; }
+  .group-block { margin-top: 10px; }
+  button.group-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    width: 100%; background: #fff; border: none; border-radius: 16px; padding: 14px;
+    margin: 0 0 6px; min-height: 52px; cursor: pointer; text-align: left; font: inherit;
+    font-size: 16px; font-weight: 700; color: inherit; -webkit-appearance: none; appearance: none;
+  }
+  button.group-head:active { background: var(--soft); }
+  button.group-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.group-head .chev { color: var(--muted); font-weight: 400; font-size: 20px; }
+  button.group-head span:last-child { white-space: nowrap; }
+  .group-block .empty { padding: 6px 8px 12px; text-align: left; }
+  .manage-label { font-size: 13px; font-weight: 700; margin: 14px 4px 8px; }
+  .cat-manage-row .move { width: auto; min-width: 42px; padding: 0 10px; font-size: 13px; }
   .cat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px; gap: 8px; }
   .cat-row .chev { color: var(--muted); }
   .bar { height: 6px; background: #e8e2d8; border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
@@ -241,7 +258,7 @@
 <!-- Edit record sheet -->
 <div class="overlay" id="editOverlay">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="editTitle">
-    <div class="sheet-head"><h3 id="editTitle">Запись</h3><button class="close-x" type="button" data-close="editOverlay">✕</button></div>
+    <div class="sheet-head"><h3 id="editTitle">Запись</h3><button class="close-x" type="button" data-close="editOverlay" aria-label="Закрыть">✕</button></div>
     <label class="lbl" for="editAmount">Сумма, zł</label>
     <input type="text" id="editAmount" inputmode="decimal" autocomplete="off">
     <label class="lbl" for="editCategory">Направление</label>
@@ -261,12 +278,8 @@
 <!-- Categories & settings sheet -->
 <div class="overlay" id="catOverlay">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="catTitle">
-    <div class="sheet-head"><h3 id="catTitle">Направления</h3><button class="close-x" type="button" data-close="catOverlay">✕</button></div>
+    <div class="sheet-head"><h3 id="catTitle">Направления</h3><button class="close-x" type="button" data-close="catOverlay" aria-label="Закрыть">✕</button></div>
     <div id="catManageList"></div>
-    <div class="cat-manage-row">
-      <input type="text" id="newCatName" placeholder="Новое направление" autocomplete="off" enterkeyhint="done">
-      <button class="icon-btn" type="button" id="addCat" aria-label="Добавить">＋</button>
-    </div>
     <div class="msg error" id="catMsg"></div>
 
     <div class="section">
@@ -518,7 +531,9 @@ if (typeof module !== "undefined") module.exports = { zlParse: zlParse, zlTokeni
 (function () {
 "use strict";
 var KEY = "zlotnik", KEY_CATS = "zlotnik_categories", KEY_SET = "zlotnik_settings";
-var DEFAULT_CATS = ["Продукты", "Кафе", "Транспорт", "Топливо", "Маникюр", "Аптека", "Развлечения", "Другое"];
+var PERSONAL_DEFAULTS = ["Продукты", "Кафе", "Маникюр", "Аптека", "Развлечения", "Другое"];
+var BUSINESS_DEFAULTS = ["Транспорт", "Топливо", "Платные дороги", "Доставка платьев"];
+var GROUPS = [{ id: "personal", name: "Личное" }, { id: "business", name: "Бизнес" }];
 var MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 var $ = function (id) { return document.getElementById(id); };
 
@@ -530,11 +545,94 @@ function store(key, val) {
   catch (e) { showMsg("Не удалось сохранить (память браузера недоступна или переполнена). Сделай резервную копию.", "error"); return false; }
 }
 
-// ---------- данные + миграция ----------
-var categories = load(KEY_CATS, null);
-if (!Array.isArray(categories) || !categories.length) categories = DEFAULT_CATS.slice();
-if (categories.indexOf("Другое") < 0) categories.push("Другое");
+function sameName(a, b) { return String(a || "").toLowerCase() === String(b || "").toLowerCase(); }
+function isOtherName(name) { return sameName(name, "Другое"); }
+function groupForLegacyName(name) {
+  for (var i = 0; i < BUSINESS_DEFAULTS.length; i++) if (sameName(BUSINESS_DEFAULTS[i], name)) return "business";
+  return "personal";
+}
+function groupName(id) {
+  for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i].id === id) return GROUPS[i].name;
+  return "Личное";
+}
+function directionById(id) {
+  for (var i = 0; i < directions.length; i++) if (directions[i].id === id) return directions[i];
+  return null;
+}
+function directionsIn(group) {
+  return directions.filter(function (d) { return d.group === group; });
+}
+function otherDirection(group) {
+  for (var i = 0; i < directions.length; i++) if (directions[i].group === group && isOtherName(directions[i].name)) return directions[i];
+  return null;
+}
+function uniqueDirId(group, name) {
+  var base = group + ":" + name, id = base, n = 2;
+  while (directionById(id)) { id = base + "#" + n; n++; }
+  return id;
+}
+function insertDirection(dir) {
+  var idx = -1;
+  directions.forEach(function (d, i) { if (d.group === dir.group && isOtherName(d.name)) idx = i; });
+  if (idx >= 0) directions.splice(idx, 0, dir);
+  else directions.push(dir);
+}
+function ensureOtherOn(list, group) {
+  if (!list.some(function (d) { return d.group === group && isOtherName(d.name); })) {
+    list.push({ id: group + ":Другое", name: "Другое", group: group });
+  }
+}
+function freshDirections() {
+  var list = [];
+  PERSONAL_DEFAULTS.forEach(function (name) { list.push({ id: "personal:" + name, name: name, group: "personal" }); });
+  BUSINESS_DEFAULTS.forEach(function (name) { list.push({ id: "business:" + name, name: name, group: "business" }); });
+  ensureOtherOn(list, "personal");
+  ensureOtherOn(list, "business");
+  return list;
+}
+function migrateStringNames(names) {
+  var personal = [], business = [];
+  names.forEach(function (raw) {
+    var name = String(raw || "").trim().replace(/\s+/g, " ");
+    if (!name) return;
+    var bucket = groupForLegacyName(name) === "business" ? business : personal;
+    if (!bucket.some(function (n) { return sameName(n, name); })) bucket.push(name);
+  });
+  var personalNames = personal.filter(function (n) { return !isOtherName(n); });
+  if (!personal.some(function (n) { return isOtherName(n); })) personalNames.push("Другое");
+  else personalNames.push(personal.filter(function (n) { return isOtherName(n); })[0]);
+  BUSINESS_DEFAULTS.forEach(function (name) {
+    if (!business.some(function (n) { return sameName(n, name); })) business.push(name);
+  });
+  var list = [];
+  personalNames.forEach(function (name) { list.push({ id: "personal:" + name, name: name, group: "personal" }); });
+  business.forEach(function (name) { list.push({ id: "business:" + name, name: name, group: "business" }); });
+  ensureOtherOn(list, "personal");
+  ensureOtherOn(list, "business");
+  return list;
+}
+function loadDirections() {
+  var raw = load(KEY_CATS, null);
+  if (!Array.isArray(raw) || !raw.length) return freshDirections();
+  if (typeof raw[0] === "string") return migrateStringNames(raw);
+  var list = [];
+  raw.forEach(function (item) {
+    if (!item || typeof item !== "object") return;
+    var name = String(item.name || "").trim().replace(/\s+/g, " ");
+    if (!name) return;
+    var group = item.group === "business" || item.group === "personal" ? item.group : groupForLegacyName(name);
+    var id = typeof item.id === "string" && item.id ? item.id : (group + ":" + name);
+    if (list.some(function (d) { return d.id === id; })) id = group + ":" + name + "#" + (list.length + 1);
+    list.push({ id: id, name: name, group: group });
+  });
+  if (!list.length) return freshDirections();
+  ensureOtherOn(list, "personal");
+  ensureOtherOn(list, "business");
+  return list;
+}
 
+// ---------- данные ----------
+var directions = loadDirections();
 var settings = Object.assign({ lang: "ru-RU", voiceMode: "auto", micGranted: false }, load(KEY_SET, {}));
 // v2: сбрасываем режим «только клавиатура», который старая версия могла включить сама
 if (settings.mic3 !== true) { settings.voiceMode = "auto"; settings.mic3 = true; try { localStorage.setItem(KEY_SET, JSON.stringify(settings)); } catch (e) {} }
@@ -543,10 +641,37 @@ function normalizeExpense(e) {
   if (!e || typeof e !== "object") return null;
   var cents = typeof e.cents === "number" ? Math.round(e.cents) : Math.round((parseFloat(e.amount) || 0) * 100);
   var d = new Date(e.date);
-  if (!(cents > 0) || isNaN(d)) return null;
+  if (!(cents > 0) || isNaN(d.getTime())) return null;
   var cat = typeof e.category === "string" && e.category ? e.category : "Другое";
-  return { id: String(e.id || (Date.now() + Math.random())), cents: cents, category: cat, date: d.toISOString(),
-    note: typeof e.note === "string" ? e.note : "" };
+  var exp = {
+    id: String(e.id || (Date.now() + Math.random())),
+    cents: cents,
+    category: cat,
+    date: typeof e.date === "string" && e.date ? e.date : d.toISOString(),
+    note: typeof e.note === "string" ? e.note : ""
+  };
+  if (e.group === "business" || e.group === "personal") exp.group = e.group;
+  if (typeof e.catId === "string" && e.catId) exp.catId = e.catId;
+  return exp;
+}
+function assignExpenseGroup(e) {
+  if (e.catId && directionById(e.catId)) {
+    var known = directionById(e.catId);
+    e.category = known.name;
+    e.group = known.group;
+    return;
+  }
+  var preferred = (e.group === "business" || e.group === "personal") ? e.group : (isOtherName(e.category) ? "personal" : groupForLegacyName(e.category));
+  var dir = null;
+  directions.forEach(function (d) { if (!dir && d.group === preferred && d.name === e.category) dir = d; });
+  if (!dir) directions.forEach(function (d) { if (!dir && d.name === e.category) dir = d; });
+  if (!dir) {
+    dir = { id: uniqueDirId(preferred, e.category), name: e.category, group: preferred };
+    insertDirection(dir);
+  }
+  e.group = dir.group;
+  e.catId = dir.id;
+  e.category = dir.name;
 }
 var rawExpenses = load(KEY, []);
 if (!Array.isArray(rawExpenses)) rawExpenses = [];
@@ -555,17 +680,17 @@ rawExpenses = rawExpenses.filter(function (e) {
   return !(e && String(e.id) === "1" && Number(e.amount) === 507 && e.category === "Продукты");
 });
 var expenses = rawExpenses.map(normalizeExpense).filter(Boolean);
-expenses.forEach(function (e) { if (categories.indexOf(e.category) < 0) categories.splice(categories.length - 1, 0, e.category); });
-store(KEY, expenses); store(KEY_CATS, categories);
+expenses.forEach(assignExpenseGroup);
+store(KEY, expenses);
+store(KEY_CATS, directions);
 
 var viewMonth = (function () { var n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })();
-var selectedCat = null;
+var selectedDirId = null;
 
 function save() { store(KEY, expenses); render(); }
-function saveCats() { store(KEY_CATS, categories); }
+function saveCats() { store(KEY_CATS, directions); }
 function saveSettings() { store(KEY_SET, settings); }
 
-// ---------- формат ----------
 function fmt(cents) {
   cents = Math.round(cents || 0);
   var frac = cents % 100 !== 0;
@@ -587,47 +712,100 @@ function showMsg(text, kind, sticky) {
   if (text && !sticky && kind === "ok") msgTimer = setTimeout(function () { el.textContent = ""; }, 3500);
 }
 
-// ---------- добавление ----------
+// Голос по-прежнему возвращает имя направления. Два «Другое» из речи не выбираются.
+// Одинаковое имя в обеих группах: выбранный чип этой группы, иначе «Личное».
+function namesForParse() {
+  var seen = {}, names = [];
+  directions.forEach(function (d) {
+    if (isOtherName(d.name)) return;
+    var key = d.name.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    names.push(d.name);
+  });
+  return names;
+}
+function resolveDirectionByName(name) {
+  var matches = directions.filter(function (d) { return d.name === name; });
+  if (!matches.length) return null;
+  if (selectedDirId) {
+    var sel = directionById(selectedDirId);
+    if (sel) {
+      for (var i = 0; i < matches.length; i++) if (matches[i].group === sel.group) return matches[i];
+    }
+  }
+  for (var j = 0; j < matches.length; j++) if (matches[j].group === "personal") return matches[j];
+  return matches[0];
+}
+function directionForEntry(parsedName) {
+  var dir = parsedName ? resolveDirectionByName(parsedName) : null;
+  if (!dir && selectedDirId) dir = directionById(selectedDirId);
+  if (!dir) dir = otherDirection("personal");
+  return dir;
+}
+
 function addExpense(raw, parsedOverride) {
   var text = String(raw || "").trim();
   if (!text) { showMsg("Напиши или продиктуй трату, например: продукты 70", "error"); return false; }
-  var p = parsedOverride || zlParse(text, categories);
+  var p = parsedOverride || zlParse(text, namesForParse());
   if (!p.hasAmount) {
     showMsg("Не нашёл сумму. Допиши её, например «" + (p.note || "продукты") + " 70», и нажми «Записать».", "error", true);
     $("input").focus();
     return false;
   }
   var d = new Date();
-  d.setDate(d.getDate() + p.dayOffset);
-  var cat = p.category || selectedCat || "Другое";
-  var exp = { id: String(Date.now()) + Math.floor(Math.random() * 1000), cents: p.cents, category: cat, date: d.toISOString(), note: p.note || "" };
+  d.setDate(d.getDate() + (p.dayOffset || 0));
+  var dir = directionForEntry(p.category);
+  if (!dir) { showMsg("Не удалось выбрать направление", "error"); return false; }
+  var exp = {
+    id: String(Date.now()) + Math.floor(Math.random() * 1000),
+    cents: p.cents,
+    category: dir.name,
+    date: d.toISOString(),
+    note: p.note || "",
+    group: dir.group,
+    catId: dir.id
+  };
   expenses.push(exp);
   $("input").value = "";
-  selectedCat = null;
-  // показать месяц, в который попала запись
+  selectedDirId = null;
   viewMonth = new Date(d.getFullYear(), d.getMonth(), 1);
   save();
   var when = p.dayOffset === -1 ? " · вчера" : p.dayOffset === -2 ? " · позавчера" : "";
-  showMsg("✓ Записано: " + fmt(p.cents) + " · " + cat + (exp.note && exp.note !== cat ? " · " + exp.note : "") + when, "ok");
+  var extra = exp.note && exp.note !== dir.name ? " · " + exp.note : "";
+  showMsg("✓ Записано: " + fmt(p.cents) + " · " + dir.name + " · " + groupName(dir.group) + extra + when, "ok");
   return true;
 }
 
-// ---------- рендер ----------
 function renderCategories() {
   var el = $("categories");
   el.innerHTML = "";
-  categories.forEach(function (cat) {
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "cat" + (cat === selectedCat ? " active" : "");
-    btn.textContent = cat;
-    btn.onclick = function () {
-      selectedCat = selectedCat === cat ? null : cat;
-      renderCategories();
-      if (selectedCat) showMsg("Направление «" + cat + "» — теперь назови или впиши сумму.", "info");
-      else showMsg("");
-    };
-    el.appendChild(btn);
+  GROUPS.forEach(function (g) {
+    var block = document.createElement("div");
+    block.className = "cat-group";
+    var label = document.createElement("div");
+    label.className = "cat-group-label";
+    label.textContent = g.name;
+    var chips = document.createElement("div");
+    chips.className = "cat-group-chips";
+    directionsIn(g.id).forEach(function (dir) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cat" + (dir.id === selectedDirId ? " active" : "");
+      btn.textContent = dir.name;
+      btn.setAttribute("data-dir-id", dir.id);
+      btn.setAttribute("data-group", g.id);
+      btn.onclick = function () {
+        selectedDirId = selectedDirId === dir.id ? null : dir.id;
+        renderCategories();
+        if (selectedDirId) showMsg("Направление «" + dir.name + "» · " + g.name + " — теперь назови или впиши сумму.", "info");
+        else showMsg("");
+      };
+      chips.appendChild(btn);
+    });
+    block.appendChild(label);
+    block.appendChild(chips);
+    el.appendChild(block);
   });
 }
 
@@ -635,24 +813,23 @@ function inRange(start, end) {
   return expenses.filter(function (e) { var d = new Date(e.date); return d >= start && d <= end; });
 }
 function total(arr) { return arr.reduce(function (s, e) { return s + e.cents; }, 0); }
-function groupByCat(arr) {
-  var byCat = {};
-  arr.forEach(function (e) { byCat[e.category] = (byCat[e.category] || 0) + e.cents; });
-  return byCat;
-}
-function sortedCatKeys(byCat) {
-  return Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; });
+function dirTotals(arr) {
+  var map = {};
+  arr.forEach(function (e) {
+    var id = e.catId || (e.group + ":" + e.category);
+    if (!map[id]) map[id] = { catId: e.catId, name: e.category, group: e.group, cents: 0 };
+    map[id].cents += e.cents;
+  });
+  return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.cents - a.cents; });
 }
 function endOfLocalDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 }
-// Те же локальные границы, что у карточек «Сегодня / Неделя / Месяц / Год»
-// (календарь устройства; на iPhone в Польше это Europe/Warsaw). Неделя с понедельника.
 function summaryPeriods(now) {
   now = now || new Date();
   var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   var todayEnd = endOfLocalDay(now);
-  var dow = (now.getDay() + 6) % 7; // пн=0 … вс=6
+  var dow = (now.getDay() + 6) % 7;
   var weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
   var weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6, 23, 59, 59, 999);
   var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -697,6 +874,8 @@ function appendExpenseButton(parent, e) {
   btn.className = "record";
   btn.setAttribute("data-id", e.id);
   btn.setAttribute("data-cents", String(e.cents));
+  btn.setAttribute("data-group", e.group || "");
+  if (e.catId) btn.setAttribute("data-cat-id", e.catId);
   if (e.note) btn.setAttribute("data-note", e.note);
   var wrap = document.createElement("div");
   var title = document.createElement("div");
@@ -704,7 +883,8 @@ function appendExpenseButton(parent, e) {
   title.textContent = e.category + (e.note && e.note !== e.category ? " · " + e.note : "");
   var meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = d.toLocaleDateString("ru-RU") + " " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) + " · изменить";
+  meta.textContent = groupName(e.group) + " · " + d.toLocaleDateString("ru-RU") + " " +
+    d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) + " · изменить";
   wrap.appendChild(title);
   wrap.appendChild(meta);
   var strong = document.createElement("strong");
@@ -712,6 +892,32 @@ function appendExpenseButton(parent, e) {
   btn.appendChild(wrap);
   btn.appendChild(strong);
   btn.onclick = function () { openEdit(e.id); };
+  parent.appendChild(btn);
+}
+function appendDrillRow(parent, opts) {
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "drill-cat";
+  if (opts.group) btn.setAttribute("data-group", opts.group);
+  if (opts.catId) btn.setAttribute("data-cat-id", opts.catId);
+  btn.setAttribute("data-cents", String(opts.cents));
+  btn.setAttribute("aria-label", opts.aria);
+  var name = document.createElement("span");
+  name.className = "name";
+  name.textContent = opts.name;
+  var right = document.createElement("span");
+  right.className = "right";
+  var amount = document.createElement("strong");
+  amount.textContent = fmt(opts.cents);
+  var chev = document.createElement("span");
+  chev.className = "chev";
+  chev.setAttribute("aria-hidden", "true");
+  chev.textContent = " ›";
+  right.appendChild(amount);
+  right.appendChild(chev);
+  btn.appendChild(name);
+  btn.appendChild(right);
+  btn.onclick = opts.onClick;
   parent.appendChild(btn);
 }
 
@@ -750,46 +956,74 @@ function renderMonth() {
   $("monthLabel").textContent = range.label;
   var monthExps = inRange(range.start, range.end);
   $("monthTotal").textContent = fmt(total(monthExps));
-
-  var byCat = groupByCat(monthExps);
-  var keys = sortedCatKeys(byCat);
-  var max = Math.max.apply(null, keys.map(function (k) { return byCat[k]; }).concat([1]));
   var container = $("byCategories");
   container.innerHTML = "";
-  if (!keys.length) {
-    container.innerHTML = '<div class="empty">Нет расходов в этом месяце</div>';
-  } else {
-    keys.forEach(function (cat) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "cat-hit";
-      btn.setAttribute("data-category", cat);
-      btn.setAttribute("data-cents", String(byCat[cat]));
-      btn.setAttribute("aria-label", cat + ", " + fmt(byCat[cat]) + ". Показать записи");
-      var row = document.createElement("div");
-      row.className = "cat-row";
-      var name = document.createElement("span");
-      name.textContent = cat;
-      var sum = document.createElement("span");
-      sum.appendChild(document.createTextNode(fmt(byCat[cat])));
-      var chev = document.createElement("span");
-      chev.className = "chev";
-      chev.setAttribute("aria-hidden", "true");
-      chev.textContent = " ›";
-      sum.appendChild(chev);
-      row.appendChild(name);
-      row.appendChild(sum);
-      var bar = document.createElement("div");
-      bar.className = "bar";
-      var fill = document.createElement("div");
-      fill.style.width = ((byCat[cat] / max) * 100).toFixed(1) + "%";
-      bar.appendChild(fill);
-      btn.appendChild(row);
-      btn.appendChild(bar);
-      btn.onclick = function () { openCategoryDrill(cat, range, null); };
-      container.appendChild(btn);
-    });
-  }
+  GROUPS.forEach(function (g) {
+    var items = monthExps.filter(function (e) { return e.group === g.id; });
+    var cents = total(items);
+    var block = document.createElement("div");
+    block.className = "group-block";
+    var head = document.createElement("button");
+    head.type = "button";
+    head.className = "group-head";
+    head.setAttribute("data-group", g.id);
+    head.setAttribute("data-cents", String(cents));
+    head.setAttribute("aria-label", g.name + ", " + fmt(cents) + ". Показать записи");
+    var name = document.createElement("span");
+    name.textContent = g.name;
+    var right = document.createElement("span");
+    right.appendChild(document.createTextNode(fmt(cents)));
+    var chev = document.createElement("span");
+    chev.className = "chev";
+    chev.setAttribute("aria-hidden", "true");
+    chev.textContent = " ›";
+    right.appendChild(chev);
+    head.appendChild(name);
+    head.appendChild(right);
+    head.onclick = function () { openGroupDrill(g.id, range, null); };
+    block.appendChild(head);
+    if (!items.length) {
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "Нет расходов";
+      block.appendChild(empty);
+    } else {
+      var rows = dirTotals(items);
+      var max = Math.max.apply(null, rows.map(function (r) { return r.cents; }).concat([1]));
+      rows.forEach(function (row) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cat-hit";
+        btn.setAttribute("data-cat-id", row.catId || "");
+        btn.setAttribute("data-group", g.id);
+        btn.setAttribute("data-cents", String(row.cents));
+        btn.setAttribute("aria-label", g.name + ", " + row.name + ", " + fmt(row.cents) + ". Показать записи");
+        var line = document.createElement("div");
+        line.className = "cat-row";
+        var nm = document.createElement("span");
+        nm.textContent = row.name;
+        var sum = document.createElement("span");
+        sum.appendChild(document.createTextNode(fmt(row.cents)));
+        var ch = document.createElement("span");
+        ch.className = "chev";
+        ch.setAttribute("aria-hidden", "true");
+        ch.textContent = " ›";
+        sum.appendChild(ch);
+        line.appendChild(nm);
+        line.appendChild(sum);
+        var bar = document.createElement("div");
+        bar.className = "bar";
+        var fill = document.createElement("div");
+        fill.style.width = ((row.cents / max) * 100).toFixed(1) + "%";
+        bar.appendChild(fill);
+        btn.appendChild(line);
+        btn.appendChild(bar);
+        btn.onclick = function () { openCategoryDrill(row.catId, range, null); };
+        block.appendChild(btn);
+      });
+    }
+    container.appendChild(block);
+  });
 
   var list = $("recordsList");
   list.innerHTML = "";
@@ -801,19 +1035,28 @@ function renderMonth() {
 var drillState = null;
 var drillReturnFocus = null;
 
+function cloneState(s) {
+  if (!s) return null;
+  return {
+    mode: s.mode, key: s.key, group: s.group, catId: s.catId, category: s.category,
+    start: s.start, end: s.end, scopeLabel: s.scopeLabel, back: cloneState(s.back)
+  };
+}
 function openPeriodDrill(key) {
   drillState = { mode: "period", key: key };
   renderDrill();
   showDrill();
 }
-function openCategoryDrill(cat, range, back) {
+function openGroupDrill(group, range, back) {
+  drillState = { mode: "group", group: group, start: range.start, end: range.end, scopeLabel: range.label, back: back || null };
+  renderDrill();
+  showDrill();
+}
+function openCategoryDrill(catId, range, back) {
+  var dir = directionById(catId);
   drillState = {
-    mode: "category",
-    category: cat,
-    start: range.start,
-    end: range.end,
-    scopeLabel: range.label,
-    back: back || null
+    mode: "category", catId: catId, category: dir ? dir.name : "", group: dir ? dir.group : "",
+    start: range.start, end: range.end, scopeLabel: range.label, back: back || null
   };
   renderDrill();
   showDrill();
@@ -828,26 +1071,52 @@ function showDrill() {
   var target = back && !back.hidden ? back : overlay.querySelector("[data-close]");
   if (target) target.focus();
 }
+function rangeForState(state) {
+  if (!state) return null;
+  if (state.mode === "period") {
+    var p = summaryPeriods()[state.key];
+    return { start: p.start, end: p.end };
+  }
+  if (state.back && state.back.mode === "period") {
+    var p2 = summaryPeriods()[state.back.key];
+    return { start: p2.start, end: p2.end };
+  }
+  if (state.back) return rangeForState(state.back);
+  return { start: state.start, end: state.end };
+}
+function periodLabelOf(state) {
+  if (!state) return "";
+  if (state.mode === "period") return periodSubtitle(summaryPeriods()[state.key]);
+  if (state.back) return periodLabelOf(state.back);
+  return state.scopeLabel || "";
+}
+function itemsForState(state) {
+  var range = rangeForState(state);
+  var items = inRange(range.start, range.end);
+  if (state.mode === "group") return items.filter(function (e) { return e.group === state.group; });
+  if (state.mode === "category") return items.filter(function (e) { return e.catId === state.catId; });
+  return items;
+}
 function renderDrill() {
   if (!drillState) return;
-  var backBtn = $("drillBack");
+  var overlay = $("drillOverlay");
+  overlay.setAttribute("data-mode", drillState.mode);
+  $("drillBack").hidden = !drillState.back;
   if (drillState.mode === "period") {
     var p = summaryPeriods()[drillState.key];
-    backBtn.hidden = true;
     $("drillTitle").textContent = p.label;
     $("drillSub").textContent = periodSubtitle(p);
-    fillDrill(inRange(p.start, p.end), true, function (cat) {
-      openCategoryDrill(cat, { start: p.start, end: p.end, label: periodSubtitle(p) }, { mode: "period", key: drillState.key });
-    });
+  } else if (drillState.mode === "group") {
+    $("drillTitle").textContent = groupName(drillState.group);
+    $("drillSub").textContent = periodLabelOf(drillState);
   } else {
-    var items = inRange(drillState.start, drillState.end).filter(function (e) { return e.category === drillState.category; });
-    backBtn.hidden = !drillState.back;
-    $("drillTitle").textContent = drillState.category;
-    $("drillSub").textContent = drillState.scopeLabel;
-    fillDrill(items, false, null);
+    var dir = directionById(drillState.catId);
+    $("drillTitle").textContent = dir ? dir.name : (drillState.category || "Направление");
+    $("drillSub").textContent = groupName(dir ? dir.group : drillState.group) + " · " + periodLabelOf(drillState);
   }
+  fillDrill(itemsForState(drillState));
 }
-function fillDrill(items, showCats, onCat) {
+function fillDrill(items) {
   var cents = total(items);
   var totalEl = $("drillTotal");
   totalEl.textContent = fmt(cents);
@@ -858,46 +1127,54 @@ function fillDrill(items, showCats, onCat) {
   var listLabel = $("drillListLabel");
   var list = $("drillList");
   list.innerHTML = "";
+  if (drillState.mode === "period") {
+    var kicker = document.createElement("div");
+    kicker.className = "drill-kicker";
+    kicker.textContent = "Группы";
+    catsEl.appendChild(kicker);
+    var key = drillState.key;
+    GROUPS.forEach(function (g) {
+      var gCents = total(items.filter(function (e) { return e.group === g.id; }));
+      appendDrillRow(catsEl, {
+        group: g.id, cents: gCents, name: g.name,
+        aria: g.name + ", " + fmt(gCents) + ". Показать записи",
+        onClick: function () {
+          var p = summaryPeriods()[key];
+          openGroupDrill(g.id, { start: p.start, end: p.end, label: periodSubtitle(p) }, { mode: "period", key: key });
+        }
+      });
+    });
+    listLabel.hidden = true;
+    if (!items.length) {
+      var emptyPeriod = document.createElement("div");
+      emptyPeriod.className = "empty";
+      emptyPeriod.textContent = "Нет расходов за этот период";
+      list.appendChild(emptyPeriod);
+    }
+    return;
+  }
   if (!items.length) {
     listLabel.hidden = true;
     var empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = drillState.mode === "period"
-      ? "Нет расходов за этот период"
-      : "В направлении «" + drillState.category + "» нет расходов за этот период";
+    if (drillState.mode === "group") empty.textContent = "В группе «" + groupName(drillState.group) + "» нет расходов за этот период";
+    else empty.textContent = "В направлении «" + ($("drillTitle").textContent || "") + "» нет расходов за этот период";
     list.appendChild(empty);
     return;
   }
-  if (showCats) {
-    var kicker = document.createElement("div");
-    kicker.className = "drill-kicker";
-    kicker.textContent = "По направлениям";
-    catsEl.appendChild(kicker);
-    var byCat = groupByCat(items);
-    sortedCatKeys(byCat).forEach(function (cat) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "drill-cat";
-      btn.setAttribute("data-category", cat);
-      btn.setAttribute("data-cents", String(byCat[cat]));
-      btn.setAttribute("aria-label", cat + ", " + fmt(byCat[cat]) + ". Показать записи");
-      var name = document.createElement("span");
-      name.className = "name";
-      name.textContent = cat;
-      var right = document.createElement("span");
-      right.className = "right";
-      var amount = document.createElement("strong");
-      amount.textContent = fmt(byCat[cat]);
-      var chev = document.createElement("span");
-      chev.className = "chev";
-      chev.setAttribute("aria-hidden", "true");
-      chev.textContent = " ›";
-      right.appendChild(amount);
-      right.appendChild(chev);
-      btn.appendChild(name);
-      btn.appendChild(right);
-      btn.onclick = function () { onCat(cat); };
-      catsEl.appendChild(btn);
+  if (drillState.mode === "group") {
+    var label = document.createElement("div");
+    label.className = "drill-kicker";
+    label.textContent = "По направлениям";
+    catsEl.appendChild(label);
+    dirTotals(items).forEach(function (row) {
+      appendDrillRow(catsEl, {
+        catId: row.catId, group: drillState.group, cents: row.cents, name: row.name,
+        aria: row.name + ", " + fmt(row.cents) + ". Показать записи",
+        onClick: function () {
+          openCategoryDrill(row.catId, { start: drillState.start, end: drillState.end, label: drillState.scopeLabel }, cloneState(drillState));
+        }
+      });
     });
   }
   listLabel.hidden = false;
@@ -911,7 +1188,6 @@ function render() {
   if (drillState && $("drillOverlay").classList.contains("open")) renderDrill();
 }
 
-// ---------- sheets ----------
 function openSheet(id) { $(id).classList.add("open"); }
 function closeSheet(id) {
   $(id).classList.remove("open");
@@ -943,20 +1219,35 @@ $("drillOverlay").addEventListener("keydown", function (ev) {
   else closeSheet("drillOverlay");
 });
 
-// ---------- редактирование ----------
 var editingId = null;
-function fillCatSelect(sel, current) {
+function fillCatSelect(sel, currentId) {
   sel.innerHTML = "";
-  var list = categories.slice();
-  if (current && list.indexOf(current) < 0) list.push(current);
-  list.forEach(function (c) { var o = document.createElement("option"); o.value = c; o.textContent = c; if (c === current) o.selected = true; sel.appendChild(o); });
+  GROUPS.forEach(function (g) {
+    var og = document.createElement("optgroup");
+    og.label = g.name;
+    directionsIn(g.id).forEach(function (d) {
+      var o = document.createElement("option");
+      o.value = d.id;
+      o.textContent = d.name;
+      if (d.id === currentId) o.selected = true;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  if (currentId && !directionById(currentId)) {
+    var extra = document.createElement("option");
+    extra.value = currentId;
+    extra.textContent = currentId;
+    extra.selected = true;
+    sel.appendChild(extra);
+  }
 }
 function openEdit(id) {
   var e = expenses.find(function (x) { return x.id === id; });
   if (!e) return;
   editingId = id;
   $("editAmount").value = centsToField(e.cents);
-  fillCatSelect($("editCategory"), e.category);
+  fillCatSelect($("editCategory"), e.catId);
   $("editDate").value = toDateInput(new Date(e.date));
   $("editNote").value = e.note || "";
   $("editMsg").textContent = "";
@@ -969,10 +1260,17 @@ $("editSave").onclick = function () {
   if (!cents) { $("editMsg").textContent = "Введи сумму, например 87,40"; return; }
   var dv = $("editDate").value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dv)) { $("editMsg").textContent = "Укажи дату"; return; }
+  var dir = directionById($("editCategory").value);
+  if (!dir) { $("editMsg").textContent = "Выбери направление"; return; }
   var old = new Date(e.date);
-  var p = dv.split("-").map(Number);
-  var nd = new Date(p[0], p[1] - 1, p[2], old.getHours(), old.getMinutes(), old.getSeconds());
-  e.cents = cents; e.category = $("editCategory").value; e.date = nd.toISOString(); e.note = $("editNote").value.trim();
+  var parts = dv.split("-").map(Number);
+  var nd = new Date(parts[0], parts[1] - 1, parts[2], old.getHours(), old.getMinutes(), old.getSeconds());
+  e.cents = cents;
+  e.category = dir.name;
+  e.group = dir.group;
+  e.catId = dir.id;
+  e.date = nd.toISOString();
+  e.note = $("editNote").value.trim();
   closeSheet("editOverlay");
   save();
   showMsg("✓ Запись изменена", "ok");
@@ -987,61 +1285,143 @@ $("editDelete").onclick = function () {
   showMsg("Запись удалена", "ok");
 };
 
-// ---------- направления ----------
 function renderCatManage() {
   var box = $("catManageList");
   box.innerHTML = "";
-  categories.forEach(function (cat, idx) {
-    var row = document.createElement("div");
-    row.className = "cat-manage-row";
-    var inp = document.createElement("input");
-    inp.type = "text"; inp.value = cat; inp.setAttribute("enterkeyhint", "done");
-    var count = expenses.filter(function (e) { return e.category === cat; }).length;
-    var ok = document.createElement("button");
-    ok.type = "button"; ok.className = "icon-btn"; ok.textContent = "✓"; ok.title = "Переименовать";
-    ok.onclick = function () { renameCat(idx, inp.value); };
-    inp.onkeydown = function (ev) { if (ev.key === "Enter") renameCat(idx, inp.value); };
-    row.appendChild(inp); row.appendChild(ok);
-    if (cat !== "Другое") {
-      var del = document.createElement("button");
-      del.type = "button"; del.className = "icon-btn del"; del.textContent = "🗑"; del.title = "Удалить";
-      del.onclick = function () {
-        if (!confirm("Удалить направление «" + cat + "»?" + (count ? " " + count + " зап. перейдут в «Другое»." : ""))) return;
-        expenses.forEach(function (e) { if (e.category === cat) e.category = "Другое"; });
-        categories.splice(idx, 1);
-        if (selectedCat === cat) selectedCat = null;
-        saveCats(); save(); renderCatManage();
-      };
-      row.appendChild(del);
-    } else {
-      inp.disabled = true; ok.disabled = true;
-    }
-    box.appendChild(row);
+  GROUPS.forEach(function (g) {
+    var title = document.createElement("div");
+    title.className = "manage-label";
+    title.textContent = g.name;
+    box.appendChild(title);
+    directionsIn(g.id).forEach(function (dir) {
+      var row = document.createElement("div");
+      row.className = "cat-manage-row";
+      row.setAttribute("data-dir-id", dir.id);
+      row.setAttribute("data-group", g.id);
+      var inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = dir.name;
+      inp.setAttribute("enterkeyhint", "done");
+      inp.setAttribute("aria-label", "Название, " + g.name);
+      var count = expenses.filter(function (e) { return e.catId === dir.id; }).length;
+      if (isOtherName(dir.name)) {
+        inp.disabled = true;
+        row.appendChild(inp);
+      } else {
+        var ok = document.createElement("button");
+        ok.type = "button";
+        ok.className = "icon-btn";
+        ok.textContent = "✓";
+        ok.title = "Переименовать";
+        ok.setAttribute("aria-label", "Переименовать «" + dir.name + "»");
+        ok.onclick = function () { renameDirection(dir.id, inp.value); };
+        inp.onkeydown = function (ev) { if (ev.key === "Enter") renameDirection(dir.id, inp.value); };
+        var move = document.createElement("button");
+        move.type = "button";
+        move.className = "icon-btn move";
+        var target = dir.group === "personal" ? "business" : "personal";
+        move.textContent = "В " + groupName(target).toLowerCase();
+        move.setAttribute("data-move", dir.id);
+        move.setAttribute("aria-label", "Перенести «" + dir.name + "» в «" + groupName(target) + "»");
+        move.onclick = function () { moveDirection(dir.id); };
+        var del = document.createElement("button");
+        del.type = "button";
+        del.className = "icon-btn del";
+        del.textContent = "🗑";
+        del.title = "Удалить";
+        del.setAttribute("aria-label", "Удалить «" + dir.name + "»");
+        del.onclick = function () {
+          var tail = count ? " " + count + " зап. перейдут в «Другое» группы «" + g.name + "»." : "";
+          if (!confirm("Удалить направление «" + dir.name + "»?" + tail)) return;
+          deleteDirection(dir.id);
+        };
+        row.appendChild(inp);
+        row.appendChild(ok);
+        row.appendChild(move);
+        row.appendChild(del);
+      }
+      box.appendChild(row);
+    });
+    var add = document.createElement("div");
+    add.className = "cat-manage-row";
+    var addInp = document.createElement("input");
+    addInp.type = "text";
+    addInp.placeholder = "Новое в «" + g.name + "»";
+    addInp.setAttribute("enterkeyhint", "done");
+    addInp.setAttribute("aria-label", "Новое направление в группе " + g.name);
+    addInp.setAttribute("data-add-group", g.id);
+    var addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "icon-btn";
+    addBtn.textContent = "＋";
+    addBtn.setAttribute("aria-label", "Добавить направление в «" + g.name + "»");
+    addBtn.onclick = function () { addDirection(g.id, addInp.value); };
+    addInp.onkeydown = function (ev) { if (ev.key === "Enter") addDirection(g.id, addInp.value); };
+    add.appendChild(addInp);
+    add.appendChild(addBtn);
+    box.appendChild(add);
   });
 }
-function renameCat(idx, name) {
-  name = String(name || "").trim().replace(/\s+/g, " ");
-  var old = categories[idx];
+function renameDirection(id, raw) {
+  var dir = directionById(id);
+  var name = String(raw || "").trim().replace(/\s+/g, " ");
   $("catMsg").textContent = "";
-  if (!name || name === old) return;
+  if (!dir || isOtherName(dir.name)) return;
+  if (!name || name === dir.name) return;
   if (name.length > 30) { $("catMsg").textContent = "Слишком длинное название"; return; }
-  if (categories.some(function (c, i) { return i !== idx && c.toLowerCase() === name.toLowerCase(); })) { $("catMsg").textContent = "Такое направление уже есть"; return; }
-  categories[idx] = name;
-  expenses.forEach(function (e) { if (e.category === old) e.category = name; });
-  if (selectedCat === old) selectedCat = name;
-  saveCats(); save(); renderCatManage();
+  if (directions.some(function (d) { return d.id !== id && d.group === dir.group && sameName(d.name, name); })) {
+    $("catMsg").textContent = "В группе «" + groupName(dir.group) + "» уже есть такое направление";
+    return;
+  }
+  dir.name = name;
+  expenses.forEach(function (e) { if (e.catId === id) e.category = name; });
+  saveCats();
+  save();
+  renderCatManage();
 }
-$("addCat").onclick = function () {
-  var name = $("newCatName").value.trim().replace(/\s+/g, " ");
+function moveDirection(id) {
+  var dir = directionById(id);
+  $("catMsg").textContent = "";
+  if (!dir || isOtherName(dir.name)) return;
+  var target = dir.group === "personal" ? "business" : "personal";
+  if (directions.some(function (d) { return d.group === target && sameName(d.name, dir.name); })) {
+    $("catMsg").textContent = "В группе «" + groupName(target) + "» уже есть «" + dir.name + "»";
+    return;
+  }
+  dir.group = target;
+  expenses.forEach(function (e) { if (e.catId === id) e.group = target; });
+  saveCats();
+  save();
+  renderCatManage();
+}
+function deleteDirection(id) {
+  var dir = directionById(id);
+  if (!dir || isOtherName(dir.name)) return;
+  var sink = otherDirection(dir.group);
+  if (!sink) return;
+  expenses.forEach(function (e) {
+    if (e.catId === id) { e.catId = sink.id; e.category = sink.name; e.group = sink.group; }
+  });
+  directions = directions.filter(function (d) { return d.id !== id; });
+  if (selectedDirId === id) selectedDirId = null;
+  saveCats();
+  save();
+  renderCatManage();
+}
+function addDirection(group, raw) {
+  var name = String(raw || "").trim().replace(/\s+/g, " ");
   $("catMsg").textContent = "";
   if (!name) return;
   if (name.length > 30) { $("catMsg").textContent = "Слишком длинное название"; return; }
-  if (categories.some(function (c) { return c.toLowerCase() === name.toLowerCase(); })) { $("catMsg").textContent = "Такое направление уже есть"; return; }
-  categories.splice(categories.length - 1, 0, name); // перед «Другое»
-  $("newCatName").value = "";
-  saveCats(); render(); renderCatManage();
-};
-$("newCatName").onkeydown = function (ev) { if (ev.key === "Enter") $("addCat").click(); };
+  if (directions.some(function (d) { return d.group === group && sameName(d.name, name); })) {
+    $("catMsg").textContent = "В группе «" + groupName(group) + "» уже есть такое направление";
+    return;
+  }
+  insertDirection({ id: uniqueDirId(group, name), name: name, group: group });
+  saveCats();
+  render();
+  renderCatManage();
+}
 $("btnDirections").onclick = function () {
   renderCatManage();
   $("langSelect").value = settings.lang;
@@ -1050,6 +1430,7 @@ $("btnDirections").onclick = function () {
   $("oaMsg").textContent = settings.oaKey ? "Ключ сохранён." : "";
   $("envNote").textContent = envDescription();
   $("dataMsg").textContent = "";
+  $("catMsg").textContent = "";
   openSheet("catOverlay");
 };
 $("langSelect").onchange = function () { settings.lang = this.value; saveSettings(); };
@@ -1072,7 +1453,6 @@ $("oaSave").onclick = function () {
     .catch(function () { $("oaMsg").textContent = "Нет связи с OpenAI. Проверь интернет и попробуй ещё раз."; });
 };
 
-// ---------- экспорт / импорт ----------
 function deliverFile(name, mime, content) {
   var blob = new Blob([content], { type: mime });
   try {
@@ -1091,18 +1471,41 @@ function deliverFile(name, mime, content) {
 function stamp() { return toDateInput(new Date()); }
 $("exportCsv").onclick = function () {
   function q(s) { s = String(s == null ? "" : s); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
-  var rows = [["Дата", "Сумма", "Категория", "Описание"].join(";")];
+  var rows = [["Дата", "Сумма", "Категория", "Описание", "Группа"].join(";")];
   expenses.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); }).forEach(function (e) {
-    rows.push([toDateInput(new Date(e.date)), (e.cents / 100).toFixed(2).replace(".", ","), q(e.category), q(e.note)].join(";"));
+    rows.push([toDateInput(new Date(e.date)), (e.cents / 100).toFixed(2).replace(".", ","), q(e.category), q(e.note), q(groupName(e.group))].join(";"));
   });
   deliverFile("zlotnik-" + stamp() + ".csv", "text/csv;charset=utf-8", "\ufeff" + rows.join("\r\n"));
   $("dataMsg").textContent = "CSV: " + expenses.length + " зап.";
 };
 $("exportJson").onclick = function () {
-  var data = { app: "zlotnik", version: 2, exported: new Date().toISOString(), categories: categories, expenses: expenses };
+  var data = { app: "zlotnik", version: 3, exported: new Date().toISOString(), categories: directions, expenses: expenses };
   deliverFile("zlotnik-backup-" + stamp() + ".json", "application/json", JSON.stringify(data, null, 1));
   $("dataMsg").textContent = "Резервная копия: " + expenses.length + " зап.";
 };
+function mergeImportedDirections(raw) {
+  if (!Array.isArray(raw)) return;
+  raw.forEach(function (item) {
+    if (typeof item === "string") {
+      var legacy = String(item || "").trim().replace(/\s+/g, " ");
+      if (!legacy) return;
+      var legacyGroup = groupForLegacyName(legacy);
+      if (!directions.some(function (d) { return d.group === legacyGroup && sameName(d.name, legacy); })) {
+        insertDirection({ id: uniqueDirId(legacyGroup, legacy), name: legacy, group: legacyGroup });
+      }
+      return;
+    }
+    if (!item || typeof item !== "object" || !item.name) return;
+    var name = String(item.name).trim().replace(/\s+/g, " ");
+    if (!name) return;
+    var group = item.group === "business" || item.group === "personal" ? item.group : groupForLegacyName(name);
+    var id = typeof item.id === "string" && item.id ? item.id : uniqueDirId(group, name);
+    if (directionById(id) || directions.some(function (d) { return d.group === group && sameName(d.name, name); })) return;
+    insertDirection({ id: id, name: name, group: group });
+  });
+  ensureOtherOn(directions, "personal");
+  ensureOtherOn(directions, "business");
+}
 $("importJsonBtn").onclick = function () { $("importJson").value = ""; $("importJson").click(); };
 $("importJson").onchange = function () {
   var f = this.files && this.files[0];
@@ -1113,17 +1516,15 @@ $("importJson").onchange = function () {
       var data = JSON.parse(r.result);
       var list = Array.isArray(data) ? data : data.expenses;
       if (!Array.isArray(list)) throw new Error("bad");
+      mergeImportedDirections(Array.isArray(data.categories) ? data.categories : []);
       var incoming = list.map(normalizeExpense).filter(Boolean);
+      incoming.forEach(assignExpenseGroup);
       var ids = {}; expenses.forEach(function (e) { ids[e.id] = true; });
       var added = 0;
       incoming.forEach(function (e) { if (!ids[e.id]) { expenses.push(e); ids[e.id] = true; added++; } });
-      var cats = Array.isArray(data.categories) ? data.categories : [];
-      cats.concat(incoming.map(function (e) { return e.category; })).forEach(function (c) {
-        if (typeof c === "string" && c && categories.indexOf(c) < 0) categories.splice(categories.length - 1, 0, c);
-      });
       saveCats(); save(); renderCatManage();
       $("dataMsg").textContent = "Восстановлено: добавлено " + added + " зап. (дубликаты пропущены)";
-    } catch (e) {
+    } catch (err) {
       $("dataMsg").textContent = "Не удалось прочитать файл — это не резервная копия Злотника.";
     }
   };
@@ -1322,7 +1723,7 @@ function finishDictation() {
     return;
   }
   for (var i = 0; i < candidates.length; i++) {
-    var p = zlParse(candidates[i], categories);
+    var p = zlParse(candidates[i], namesForParse());
     if (p.hasAmount) { $("input").value = candidates[i]; addExpense(candidates[i], p); return; }
   }
   $("input").value = candidates[0];
@@ -1372,7 +1773,11 @@ function startRecognition() {
 function cloudMode() { return settings.voiceMode === "openai" && !!settings.oaKey && !!(navigator.mediaDevices && window.MediaRecorder); }
 var cl = { stream: null, rec: null, chunks: [], ctx: null, timer: null, maxT: null, releaseT: null, busy: false, spoke: false };
 function clLang() { return (settings.lang || "ru-RU").slice(0, 2); }
-function clPrompt() { return "Расходы в злотых. Направления: " + categories.join(", ") + ". Пример: продукты 70, вчера кофе 18, бедронка 87,40."; }
+function clPrompt() {
+  var personal = directionsIn("personal").map(function (d) { return d.name; }).join(", ");
+  var business = directionsIn("business").map(function (d) { return d.name; }).join(", ");
+  return "Расходы в злотых. Личное: " + personal + ". Бизнес: " + business + ". Пример: продукты 70, вчера кофе 18, транспорт 40, платные дороги 25.";
+}
 function clRelease() {
   clearTimeout(cl.releaseT);
   if (cl.stream) { cl.stream.getTracks().forEach(function (t) { t.stop(); }); cl.stream = null; }
@@ -1457,7 +1862,7 @@ function clFinish(mime) {
       }
       var text = String((res.j && res.j.text) || "").replace(/[.!?]+$/, "").trim();
       if (!text) { showMsg("Я ничего не разобрал. Нажми 🎤 и скажи ещё раз.", "error", true); return; }
-      var p = zlParse(text, categories);
+      var p = zlParse(text, namesForParse());
       if (p.hasAmount) { $("input").value = text; addExpense(text, p); return; }
       $("input").value = text;
       showMsg("Услышал «" + text + "», но не нашёл сумму. Допиши сумму и нажми «Записать».", "error", true);
@@ -1516,7 +1921,7 @@ if (keyboardMode()) $("hint").textContent = "Нажми 🎤 — откроет�
 updateVoiceUi();
 render();
 
-window.__zl = { get expenses() { return expenses; }, get categories() { return categories; }, fmt: fmt, env: envDescription };
+window.__zl = { get expenses() { return expenses; }, get directions() { return directions; }, fmt: fmt, env: envDescription };
 })();
 </script>
 </body>
